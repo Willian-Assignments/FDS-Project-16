@@ -43,9 +43,8 @@ It is a data set with around 200-300 cells in total having around 50K genes. Eac
 
 ## Quality control
 
-### How many genes are detected per cell
-
-### Average expression level  per gene
+- How many genes are detected per cell
+- Average expression level per gene
 
 ## Perform unsupervised clustering to identify subpopulations of cells
 

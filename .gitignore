@@ -16,27 +16,22 @@ xcuserdata
 *.moved-aside
 DerivedData
 *.xcuserstate
-
-
 ### C ###
 # Object files
 *.o
 *.ko
 *.obj
 *.elf
-
 # Libraries
 *.lib
 *.a
 *.la
 *.lo
-
 # Shared objects (inc. Windows DLLs)
 *.dll
 *.so
 *.so.*
 *.dylib
-
 # Executables
 *.exe
 *.out
@@ -44,8 +39,6 @@ DerivedData
 *.i*86
 *.x86_64
 *.hex
-
-
 ### OSX ###
 ######################
 .DS_Store
@@ -55,34 +48,25 @@ DerivedData
 .Trashes
 ehthumbs.db
 Thumbs.db
-
 # Icon must end with two \r
 Icon
-
-
 # Thumbnails
 ._*
-
 # Files that might appear on external disk
 .Spotlight-V100
 .Trashes
-
 # Directories potentially created on remote AFP share
 .AppleDB
 .AppleDesktop
 Network Trash Folder
 Temporary Items
 .apdisk
-
-
 ### Python ###
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
-
 # C extensions
 *.so
-
 # Distribution / packaging
 .Python
 env/
@@ -98,17 +82,14 @@ var/
 *.egg-info/
 .installed.cfg
 *.egg
-
 # PyInstaller
 #  Usually these files are written by a python script from a template 
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
-
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
-
 # Unit test / coverage reports
 htmlcov/
 .tox/
@@ -116,21 +97,15 @@ htmlcov/
 .cache
 nosetests.xml
 coverage.xml
-
 # Translations
 *.mo
 *.pot
-
 # Django stuff:
 *.log
-
 # Sphinx documentation
 docs/_build/
-
 # PyBuilder
 target/
-
-
 ### R ###
 # Example code in package build process
 *-Ex.R
@@ -140,7 +115,6 @@ target/
 .Rhistory
 /.Rproj.user/
 *.Rproj
-
 ### Perl ###
 /blib/
 /.build/
@@ -161,8 +135,6 @@ nytprof.out
 /pm_to_blib
 *.o
 *.bs
-
-
 ### TeX ###
 ## Core latex/pdflatex auxiliary files:
 *.aux
@@ -172,14 +144,12 @@ nytprof.out
 *.fls
 *.out
 *.toc
-
 ## Intermediate documents:
 *.dvi
 # these rules might exclude image files for figures etc.
 # *.ps
 # *.eps
 # *.pdf
-
 ## Bibliography auxiliary files (bibtex/biblatex/biber):
 *.bbl
 *.bcf
@@ -187,27 +157,21 @@ nytprof.out
 *-blx.aux
 *-blx.bib
 *.run.xml
-
 ## Build tool auxiliary files:
 *.fdb_latexmk
 *.synctex.gz
 *.synctex.gz(busy)
 *.pdfsync
-
 ## Auxiliary and intermediate files from other packages:
-
 # algorithms
 *.alg
 *.loa
-
 # amsthm
 *.thm
-
 # beamer
 *.nav
 *.snm
 *.vrb
-
 #(e)ledmac/(e)ledpar
 *.end
 *.[1-9]
@@ -216,57 +180,43 @@ nytprof.out
 *.[1-9]R
 *.[1-9][0-9]R
 *.[1-9][0-9][0-9]R
-
 # glossaries
 *.acn
 *.acr
 *.glg
 *.glo
 *.gls
-
 # hyperref
 *.brf
-
 # listings
 *.lol
-
 # makeidx
 *.idx
 *.ilg
 *.ind
 *.ist
-
 # minitoc
 *.maf
 *.mtc
 *.mtc0
-
 # minted
 *.pyg
-
 # morewrites
 *.mw
-
 # nomencl
 *.nlo
-
 # sagetex
 *.sagetex.sage
 *.sagetex.py
 *.sagetex.scmd
-
 # sympy
 *.sout
 *.sympy
 sympy-plots-for-*.tex/
-
 # todonotes
 *.tdo
-
 # xindy
 *.xdy
-
-
 ### LaTeX ###
 *.acn
 *.acr
@@ -300,42 +250,34 @@ sympy-plots-for-*.tex/
 *.vrb
 *.xdy
 *.tdo
-
 ### SublimeText ###
 # workspace files are user-specific
 *.sublime-workspace
-
 # project files should be checked into the repository, unless a significant
 # proportion of contributors will probably not be using SublimeText
 # *.sublime-project
-
 #sftp configuration file
 sftp-config.json
-
-
 ### C++ ###
 # Compiled Object files
 *.slo
 *.lo
 *.o
 *.obj
-
 # Compiled Dynamic libraries
 *.so
 *.dylib
 *.dll
-
 # Fortran module files
 *.mod
-
 # Compiled Static libraries
 *.lai
 *.la
 *.a
 *.lib
-
 # Executables
 *.exe
 *.out
 *.app
 .Rproj.user
+.httr-oauth
