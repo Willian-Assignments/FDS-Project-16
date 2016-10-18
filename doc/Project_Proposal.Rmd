@@ -1,0 +1,62 @@
+---
+title: "Explore Single-cell sequencing dataset"
+output:
+  pdf_document: 
+    fig_caption: yes
+    number_sections: yes
+    toc: yes
+  html_notebook: default
+authors: Yun Yan (yy1533@nyu.edu), Willian Zhang (yz3735@nyu.edu)
+---
+
+# Abstract
+
+In cancer the heterogeneity of bulk cells widely exists and is one of the main obstacles to achieve either targeted cancer treatment or personalized medical care. To address the problem, single-cell sequencing technology emerges and provides the entire gene expression profile at individual cell level, which reaches highest resolution of investigating expression of cells. Here we utilize unsupervised machine learning to identify putative and established sub-population and possible new marker genes for specific cell types. As the data itself is essentially a matrix with samples (i.e. cells) as columns and features (i.e. genes) as rows, the approaches in this project could be extended to other general classification problem.
+
+# Background
+
+## Initial motivation of project
+
+There exists emerging trend that big companies engaging in either internet or data are heading to healthcare areas, for example, [Verily Life Sciences](https://verily.com/) of Alphabet Inc. which is the umbrella company of Google, [IBM Watson Health](https://www.ibm.com/watson/health/), etc., thus we are looking for some data set which is not only dedicated to life sciences researches, but also has enough samples and features.
+
+## Similarity between single-cell dataset and typical computer science
+
+Single-cell sequencing technique gives expression levels of entire genes at individual cell level, which means a big data set composing of hundreds of cells (i.e. samples) with thousands of genes (i.e. features).
+
+In typical computer science data set, for example, developing recommendation systems at Amazon, customer segmentation at Bank of America, etc. They are normally starting from a data matrix with rows as customer ID and columns as descriptive features, e.g. name of watched movies watched, purchased products, annual salary, etc. 
+
+## Domain-specific knowledge
+
+**Cell types**: Different types of cells have different biological functions, which is the result of different gene expression profiles. 
+
+**Marker genes**: Genes that are exclusively expressed at specific type of cells.
+
+# Data Source
+
+[HSMMSingleCell](http://bioconductor.org/packages/release/data/experiment/html/HSMMSingleCell.html): primary human skeletal muscle myoblasts (HSMM) were expanded under high mitogen conditions (GM) and then differentiated by switching to low-mitogen media (DM). The switch can be manually triggered by adding serum when cell culturing. 49-77 cells were captured at each of four time points (0, 24, 48, 72 hours) following serum switch.
+
+It is a data set with around 200-300 cells in total having around 50K genes. Each cell has a time point label: 0, 24, 48, 72.
+
+# Expected results and planned methods
+
+## Quality control
+
+### How many genes are detected per cell
+
+### Average expression level  per gene
+
+## Using clustering to identify subpopulations of cells
+
+### Infer possible number of existed subpopulations
+
+### Hierarchical clustering
+
+### Dimension reduction via PCA, t-SNE for visualization
+
+## Using LDA model to infer lineage of cell types
+
+## Predict developmental status of unseen new cell
+
+
+
+
