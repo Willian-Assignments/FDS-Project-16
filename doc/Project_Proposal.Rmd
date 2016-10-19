@@ -80,3 +80,6 @@ As the Citibike trip data provides the start station and end station information
 # Summary
 We first give overview of citibike trip around New York City by modern data visualization methods. Then we cluster the temporal usage of stations to identify subgroups with different 'active-hour'. Finally we run time-series analysis to quantitatively predict the activity of certain station. In sum, we provide a real-time strategy to keep the stations balanced.
 
+# Codes
+
+See <https://github.com/Puriney/ineedabike>
