@@ -83,3 +83,7 @@ We first give overview of citibike trip around New York City by modern data visu
 # Codes
 
 See <https://github.com/Puriney/ineedabike>
+
+# Contributions
+
+Y.Yan designed the project and wrote the manuscript.
