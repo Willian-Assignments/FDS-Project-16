@@ -1,5 +1,5 @@
 ---
-title: "Explore Single-cell sequencing dataset"
+title: "Infer NYC Citibike usage"
 output:
   pdf_document: 
     fig_caption: yes
@@ -11,53 +11,72 @@ authors: Yun Yan (yy1533@nyu.edu), Willian Zhang (yz3735@nyu.edu)
 
 # Abstract
 
-In cancer the heterogeneity of bulk cells widely exists and is one of the main obstacles to achieve either targeted cancer treatment or personalized medical care. To address the problem, single-cell sequencing technology emerges and provides the entire gene expression profile at individual cell level, which reaches highest resolution of investigating expression of cells. Here we utilize unsupervised machine learning to identify putative and established sub-population and possible new marker genes for specific cell types. As the data itself is essentially a matrix with samples (i.e. cells) as columns and features (i.e. genes) as rows, the approaches in this project could be extended to other general classification problem.
+NYC Citibike launched in September 2013 and becomes new city symbol of New York City similar to Empire State Building, since it becomes popular choice for not only daily commuting but also for tourists to walk around New York. Therefore the usage of Citibike possibly reflects hidden social pattern of how people move inside city. To address the issue, we utilize modern visualization methods to give an overview of Citibike usage. To provide Citibike company a potential guide on how to manually balance available bikes in stations, we perform unsupervised machine learning to find out the distinctive type of Citibike station in terms of usage in different time frame. Furthermore, we run time-series analysis to predict the usage of several hot-spot of stations, e.g. Citibike stations around Penn Station, Central Park, etc.
 
-# Background
+# Data
 
-## Initial motivation of project
+In light of data format consistency, 21 months of [Citibike trip data](https://s3.amazonaws.com/tripdata/index.html) are chosen, i.e. from 2015-01 to most recent 2016-09.
 
-There exists emerging trend that big companies engaging in either internet or data are heading to healthcare areas, for example, [Verily Life Sciences](https://verily.com/) of Alphabet Inc. which is the umbrella company of Google, [IBM Watson Health](https://www.ibm.com/watson/health/), etc., thus we are looking for some data set which is not only dedicated to life sciences researches, but also has enough samples and features so that we can apply machine learning methods.
+Data source: <https://s3.amazonaws.com/tripdata/index.html>
 
-## Similarity between single-cell dataset and typical computer science project
+Citibike data-set has following attributes in terms of trip:
 
-Single-cell sequencing technique gives expression quantaties of all genes at individual cell level, which is a big data set composing of hundreds of cells (i.e. samples) with thousands of genes (i.e. features).
+- Trip duration time (seconds)
+- Trip start and end time
+- Trip start and end station, together with station ID and longitude/latitude information
+- Bike ID
 
-In typical computer science data set, for example, developing recommendation systems at Amazon, customer segmentation at Bank of America, they are normally starting from a data matrix with rows as customer ID and columns as descriptive features, e.g. name of watched movies watched, purchased products, annual salary, etc. 
+In terms of the customer information of trip:
 
-Therefore in terms of format of data, the two share a lot.
+- User type (one-time customer / annual member)
+- Gender (0=unknown, 1=male, 2=female)
+- Year of birth
 
-## Domain-specific knowledge
+# Planned methods and expected results
 
-**Cell types**: Different types of cells have different biological functions, which is the result of different gene expression profiles. 
+## Data I/O
 
-**Marker genes**: Genes that are exclusively expressed at specific type of cells.
+Since the analysis is involved in large volume of csv files, `readr` (<https://github.com/hadley/readr>) and `dplyr` (<https://github.com/hadley/dplyr>) are used to achieve efficient data I/O.
 
-# Data Source
+## Overivew of Citibike usage within 24 hours
 
-[HSMMSingleCell](http://bioconductor.org/packages/release/data/experiment/html/HSMMSingleCell.html): primary human skeletal muscle myoblasts (HSMM) were expanded under high mitogen conditions (GM) and then differentiated by switching to low-mitogen media (DM). The switch can be manually triggered by adding serum when cell culturing. 49-77 cells were captured at each of four time points (0, 24, 48, 72 hours) following serum switch.
+Playing 'God-view' game to identify possible 'heart-beat' of New York City. This part is data visualization to show the temporal and dynamic pattern of citibike trip within 24 hours. In particular there might be some hot-spot emerge.
 
-It is a data set with around 200-300 cells in total having around 50K genes. Each cell has a time point label: 0, 24, 48, 72.
+There are following 2 aspects to furthermore dig the data to provide possible interesting findings:
 
-# Expected results and planned methods
+### 24-hr trip of annual member v.s. one-time custormer 
+As annual members are more likely to choose Citibike for daily commuting, with this **hypothesis** in mind, is there any possible difference exist in preference of the two types of users? 
 
-## Quality control
+### 24-hr trip in weekdays v.s. weekends for annual member
+How about annual member use Citibike in weekends? Would it be silent, or more likely as tourist to travel around city?
 
-- How many genes are detected per cell
-- Average expression level per gene
+## Identify subpopulation of Citibike stations
 
-## Perform unsupervised clustering to identify subpopulations of cells
+Station would vary on bike usage in different hours per day, shown as the below figure generated by dummy data. With this **hypothesis** in mind, it is possible to identify sub-population of Citibike stations by performing unsupervised **clustering** methods, e.g. some stations are active during rush hour and silent during working hour, while some other stations have opposite pattern.
 
-### Infer possible number of existed subpopulations
+```{r, echo=F, message=F, warning=F, error=FALSE}
+library(dplyr)
+library(reshape2)
+library(ggplot2)
+t <- seq(0, 2 * pi, length.out = 24)
+pick <- sin(t) * 10 + runif(n=length(t))
+drop <- cos(t) * 10 + runif(n=length(t))
+dt <- data.frame(hour=t, pick=pick, drop=drop)
+dtm <- melt(dt, id.vars='hour', variable.name='Use', value.name='N')
+p <- ggplot(dtm, aes(x=hour, y=N, color=Use)) + geom_line() + ggtitle('Station X')
+print(p)
+```
 
-### Hierarchical clustering
+These outcomes would be helpful for identifying the hot-spot of stations and thus Citibike companies can take care of it, for example, manually balancing the specific stations before their own 'rush-hour' come.
 
-### Dimension reduction via PCA, t-SNE for visualization
+## Predict bike usage of specific station
 
-## Perform LDA model to infer lineage of cell types
+Once the activity patterns of stations  are learnt, the next question is how to take care of stations before their own 'rush-hour' come, e.g. how many bikes needed to be manually put? Therefore we run **time-series analysis** to quantitatively predict the possible needs in next few hours of specific station.
 
-## Predict developmental status of unseen new cell by `xgboost`
+## Optional: network analysis of trip flow between stations
 
+As the Citibike trip data provides the start station and end station information, it is not surprising we can run network analysis to have an idea of how trip flows between stations. It depends on the content of coming lecture, thus this part is optional.
 
-
+# Summary
+We first give overview of citibike trip around New York City by modern data visualization methods. Then we cluster the temporal usage of stations to identify subgroups with different 'active-hour'. Finally we run time-series analysis to quantitatively predict the activity of certain station. In sum, we provide a real-time strategy to keep the stations balanced.
 
