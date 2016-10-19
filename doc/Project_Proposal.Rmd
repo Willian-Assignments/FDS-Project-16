@@ -6,7 +6,7 @@ output:
     number_sections: yes
     toc: yes
   html_notebook: default
-authors: Yun Yan (yy1533@nyu.edu), Willian Zhang (yz3735@nyu.edu)
+author: "Yun Yan (yy1533@nyu.edu), Willian Zhang (yz3735@nyu.edu)"
 ---
 
 # Abstract
