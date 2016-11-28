@@ -1,6 +1,6 @@
-library(ggmap)
 theme_set(theme_bw(base_size = 22))
-myGthm <- theme(text = element_text(size = 25))
+myGthm <- theme(text = element_text(size = 25),
+                legend.position='bottom')
 #                 axis.text.y=element_blank(),
 #                 axis.text.x=element_blank())
 
@@ -19,6 +19,7 @@ data$stopweekday <- factor(weekdays(data$stopTimestamp),
                                       "Wednesday", "Thursday", "Friday",
                                       "Saturday"))
 data$startHr <- format(data$startTimestamp, '%H')
+data$stopHr <- format(data$stopTimestamp, '%H')
 
 start_lat_min <- min(data$start.station.latitude)
 start_lat_max <- max(data$start.station.latitude)
@@ -46,9 +47,10 @@ q <-
          data = data, maptype = "toner-lite",
          geom = "blank", zoom = 14,
          legend = "right") +
+  ggtitle('Pick-up') +
   stat_density_2d(aes(fill = ..level..),
                   geom = "polygon", alpha = .3, color = NA) +
-  scale_fill_gradient2("Pick-Up Activities",
+  scale_fill_gradient2("Activities",
                        low = "ghostwhite", mid = "yellow", high = "red") +
   myGthm
 png(filename = file.path(getwd(), 'fig/thematic_plot.png'),
