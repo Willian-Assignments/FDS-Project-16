@@ -1,0 +1,209 @@
+---
+title: "Visualization, Time-series Analysis and Community Detection on CitiBike"
+output: 
+  html_document:
+    fig_caption: yes
+    number_sections: yes
+    toc: yes
+  html_notebook:
+    fig_caption: yes
+    highlight: pygments
+    number_sections: yes
+    theme: flatly
+    toc: yes
+author: "Yun Yan (yy1533@nyu.edu), Willian Zhang (willian@nyu.edu)"
+---
+
+```{r setup, echo=T, include=FALSE}
+knitr::opts_chunk$set(echo=T, error=F, warning=F, message=F)
+```
+
+# Goal
+
+We have the following general questions to ask:
+
+- Is there any specific purpose of people to use CitiBike?
+- Can we find a robust approach to indirectly study the hidden preference of human activities which cannot be directly observed.
+
+# Why Citibike trip data
+
+Here are three main reasons to select CitiBike trip data:
+
+1. Throughout the semester the course introduced many data science method, e.g. regression, clustering, time-series analysis, NLP, and network analysis, etc, we are looking for a wonderful dataset which would allow us try the methods as many as possible.
+2. The context covered by the dataset should not be unfamiliar to students, hence the solutions to challenges can be shared and have actual meanings in real life.
+3. The volume of dataset should be small, though we don't require big data. In the same time, the format of data should be not dirty so that we can spend most of time on selecting appropriate method, tuning the parameters of algorithms, and examing the results to generate interpretations that make sense.
+
+# Tech details before running the RMD
+
+## Compile this RMD
+
+Run the following command in terminal:
+
+```bash
+Rscript -e "rmarkdown::render('FinalProject_FDS.Rmd')"
+```
+
+## Set-up and dependencies
+```{r}
+WORKDIR <- getwd()
+FIGDIR <- file.path(WORKDIR, 'fig')
+SRCDIR <- file.path(WORKDIR, 'src')
+DATADIR <- file.path(WORKDIR, 'data')
+if (!dir.exists(FIGDIR)) dir.create(FIGDIR)
+if (!dir.exists(SRCDIR)) dir.create(SRCDIR)
+if (!dir.exists(DATADIR)) dir.create(DATADIR)
+
+library('dplyr')
+library('reshape2')
+library('ggplot2')
+library('lubridate')
+library('readr')
+library('scales')
+library('cowplot')
+library('forecast')
+library('pheatmap')
+library('ggmap')
+library('igraph')
+
+#theme_set(theme_bw(base_size = 12))
+myGthm <- theme(text = element_text(size = 15),
+                legend.position='bottom')
+```
+
+# Download or import data
+
+Citibike data source is <https://s3.amazonaws.com/tripdata/index.html>. Here I provided a bash script to download and unzip data. 
+
+If you would like to run from scratch, please run following commands in ternimal:
+
+```bash
+# go to work-directory of project (same as this RMD file)
+cd . 
+# create data folder
+mkdir -p data 
+cd ./src
+sh get_data.sh
+```
+
+If successful, citibike trip dataset is available at folder data to be read in.
+```{r}
+infile <- list.files(path=file.path(getwd(), 'data'), pattern='*.csv',
+                     full.names = T)
+```
+
+```r
+data <- bind_rows(lapply(infile, function(x) {
+  read.csv(x, stringsAsFactors=FALSE)}))
+```
+
+Alternatively, I have attached a RDS file which is exactly same as the above. Load the RDS file if you don't want to download and avoid time on importing data.
+
+```r
+data <- readRDS(file.path(DATADIR, 'citibike.rds'))
+```
+```{r}
+data <- read.csv(infile[1], stringsAsFactors = F)
+```
+
+# Data formatting
+
+## Time
+
+The time information in raw data should be converted to time format recognized by R language.
+
+```{r}
+data$startTimestamp <- as.POSIXct(strptime(data$starttime, '%m/%d/%Y %H:%M',
+                                           tz = 'EST5EDT'))
+data$stopTimestamp  <- as.POSIXct(strptime(data$stoptime, '%m/%d/%Y %H:%M',
+                                           tz = 'EST5EDT'))
+data$startweekday <- factor(weekdays(data$startTimestamp),
+                            levels= c("Sunday", "Monday","Tuesday",
+                                      "Wednesday", "Thursday", "Friday",
+                                      "Saturday"))
+data$stopweekday <- factor(weekdays(data$stopTimestamp),
+                            levels= c("Sunday", "Monday","Tuesday",
+                                      "Wednesday", "Thursday", "Friday",
+                                      "Saturday"))
+data$startHr <- format(data$startTimestamp, '%H')
+data$stopHr <- format(data$stopTimestamp, '%H')
+```
+
+## Longitude / Latitude
+```{r}
+start_lat_min <- min(data$start.station.latitude)
+start_lat_max <- max(data$start.station.latitude)
+start_lon_min <- min(data$start.station.longitude)
+start_lon_max <- max(data$start.station.longitude)
+
+plot_lat_bt  <- start_lat_min - 2
+plot_lat_up  <- start_lat_max + 2
+plot_lon_lft <- start_lon_min - 2
+plot_lon_rit <- start_lon_max + 2
+```
+
+---
+**The below are results**
+
+# Visualizing trips to infer hidden pattern of biker preference
+
+```{r}
+q <-
+  qmplot(start.station.longitude, start.station.latitude,
+         data = data, maptype = "toner-lite",
+         geom = "blank", zoom = 14,
+         legend = "right") +
+  ggtitle('Pick-up') +
+  stat_density_2d(aes(fill = ..level..),
+                  geom = "polygon", alpha = .3, color = NA) +
+  scale_fill_gradient2("Activities",
+                       low = "ghostwhite", mid = "yellow", high = "red")
+```
+
+## Picking activity of Usertype (One-time Customer v.s. Member)
+```{r}
+## Only Usertype (2 types)
+q1 <- q + facet_wrap( ~ usertype)
+print(q1)
+```
+
+## Picking activity of Week ~ Usertype
+```{r}
+q2 <- q + facet_wrap(startweekday ~ usertype)
+print(q2)
+```
+
+## Picking activity in 24-hour of Member only during Weekdays
+
+```{r}
+subscriber <- data[data$usertype == 'Subscriber', ]
+
+## One-day at NYC (weekdays and weekends)
+weekdays_idx <- subscriber$startweekday %in% c("Monday","Tuesday",
+                                               "Wednesday", "Thursday", "Friday")
+weekends_idx <- !weekdays_idx
+subscriberWday <- subscriber[weekdays_idx, ]
+subscriberWend <- subscriber[weekends_idx, ]
+qSubWday <-
+  qmplot(start.station.longitude, start.station.latitude,
+         data = subscriberWday, maptype = "toner-lite",
+         geom = "blank", zoom = 14,
+         legend = "right") +
+  stat_density_2d(aes(fill = ..level..),
+                  geom = "polygon", alpha = .3, color = NA) +
+  scale_fill_gradient2("Pick-Up Activities",
+                       low = "ghostwhite", mid = "yellow", high = "red")
+
+qSubWday2 <- qSubWday + facet_wrap(~startHr)
+print(qSubWday2)
+```
+
+## Conclusions from visualization
+
+
+
+
+
+
+
+
+
