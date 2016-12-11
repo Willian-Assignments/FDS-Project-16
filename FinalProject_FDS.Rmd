@@ -103,6 +103,7 @@ data <- readRDS(file.path(DATADIR, 'citibike.rds'))
 ```
 ```{r}
 data <- read.csv(infile[1], stringsAsFactors = F)
+data <- sample_frac(data, 0.1)
 ```
 
 # Data formatting
@@ -146,6 +147,8 @@ plot_lon_rit <- start_lon_max + 2
 
 # Visualizing trips to infer hidden pattern of biker preference
 
+Before I applied methods to analyze the data, it is essential to **see** the data. My philosophy is that if there are something playing important role, either itself or its consequences should also have high chances to be observed. Therefore, in order to investigate whether there exists hidden pattern of human activities, it is worthwhile to visualize the dataset at first to explore the properties contained behind dataset.
+
 ```{r}
 q <-
   qmplot(start.station.longitude, start.station.latitude,
@@ -168,7 +171,7 @@ print(q1)
 
 ## Picking activity of Week ~ Usertype
 ```{r}
-q2 <- q + facet_wrap(startweekday ~ usertype)
+q2 <- q + facet_wrap(startweekday ~ usertype, ncol=8)
 print(q2)
 ```
 
@@ -193,11 +196,81 @@ qSubWday <-
   scale_fill_gradient2("Pick-Up Activities",
                        low = "ghostwhite", mid = "yellow", high = "red")
 
-qSubWday2 <- qSubWday + facet_wrap(~startHr)
+qSubWday2 <- qSubWday + facet_wrap(~startHr, ncol=8)
 print(qSubWday2)
 ```
 
 ## Conclusions from visualization
+
+In first figure where picking activities all the time for Customer v.s. Member is displayed, it can be found that one-time customers pick up bikes without preferences, while the members have enriched regions, for example the station at 8th Ave & W 31 St, which is cloest to Penn Station. It implies the existence of specific reason to use CitiBike, i.e. members tend to ride for daily commuting while one-time customers ride for fun.
+
+Furthermore, in the second figure where additional comparison on weedays is displayed, it further supports the implication because the highlighted regions of members are stable and one-time customers are still present everywhere.
+
+Finally, by increasing the temporal resolution to hourly, the exact hours when activities of members are enriched can be found. In the early morning (6, 7, 8 AM, i.e. rush hour in the morning) the enriched regions fired up; they faded away during the day until the nightfall. At nightfall (5, 6 PM i.e. rush-hour), the enriched regions showed up again.
+
+In sum, there are two messages inferred by data visualization:
+
+1. There are hidden pattern of people to use CitiBike.
+2. Due to the hidden pattern of human activities, different station has its own temporal profile. For example, they have different rush-hours in terms of picking and docking.
+
+
+# Identify subgroups of stations in terms of temporal profiles
+
+```{r}
+set.seed(1234)
+## Long-format to wide-format of citybike
+citibike_long2wide <- function(data, activity_type = c('pick', 'dock')){
+  if (activity_type == 'pick') {
+    station_24hr_long <- dplyr::select(data, start.station.name, startHr)
+  } else if (activity_type == 'dock') {
+    station_24hr_long <- dplyr::select(data, end.station.name, stopHr)
+  } else {
+    stop('Error: activity type is either pick or dock.')
+  }
+  colnames(station_24hr_long) <- c('NAME', 'HOUR')
+  station_24hr_long <- group_by(station_24hr_long, NAME, HOUR) %>%
+    summarise(TRIPS=n())
+  station_24hr_wide <- dcast(station_24hr_long, NAME~HOUR,
+                             value.var = 'TRIPS', sum, fill=0)
+  rownames(station_24hr_wide) <- station_24hr_wide$NAME
+  station_24hr_wide <- station_24hr_wide[, -1]
+  return(station_24hr_wide)
+}
+pick_station_24hr <- citibike_long2wide(data=data, activity_type='pick')
+dock_station_24hr <- citibike_long2wide(data=data, activity_type='dock')
+```
+
+```{r}
+orderbyRowSum <- function(data){
+  o <- mutate(data, SUM=rowSums(data), row_names=rownames(data)) %>%
+    dplyr::arrange(desc(SUM), row_names) %>%
+    dplyr::select(-SUM)
+  rownames(o) <- o$row_names
+  o <- dplyr::select(o, -row_names)
+  return(o)
+}
+top_N <- 20
+pick_station_24hr_desc <- orderbyRowSum(pick_station_24hr)
+dock_station_24hr_desc <- orderbyRowSum(dock_station_24hr)
+top_pick_station_names <- rownames(pick_station_24hr_desc)[seq_len(top_N)]
+top_dock_station_names <- rownames(dock_station_24hr_desc)[seq_len(top_N)]
+desc_pick_station_names <- rownames(pick_station_24hr_desc)
+desc_dock_station_names <- rownames(dock_station_24hr_desc)
+```
+```{r}
+pheatmap(pick_station_24hr_desc[top_pick_station_names, ],
+         cluster_rows = F, cluster_cols = F,
+         main='Picking activities of Stations with Top 24-hr Picking Activities')
+pheatmap(dock_station_24hr_desc[top_pick_station_names, ],
+         cluster_rows = F, cluster_cols = F,
+         main='Docking activities of Stations with Top 24-hr Picking Activities')
+```
+
+
+
+
+
+
 
 
 
