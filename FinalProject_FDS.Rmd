@@ -735,10 +735,24 @@ Human activities cannot be observed directly, but the picking and docking activi
 
 Future work is to find whether there are stations of which the temporal profile changes after some year. For example, station-X during 2013-2015 is Type-A station, i.e. home-like station. But all of a sudden, since 2016, the temporal profile of station-X changed to Type-C station, i.e. stable through all the day. It would suggest either the neighborhood got entirely changed, or the major transportation station got changed. The meaning is that without directly investigating the hidden pattern of human activities, we can still have an indirect approach to capture the changes. 
 
+# Contributions
 
+**Yun Yan**
 
+- CitiBike data visualization on yearly, weekly, hourly data
+- CitiBike data visualization on comparing Member with one-time Customer
+- P/D index
+- Identify subgroups of stations based on P/D index clustering
+- Time-series analysis by using AR
+- Community detection
 
+**Willian Zhang**
 
+- Project discussion
+
+# Codes
+
+<https://github.com/Puriney/ineedabike>
 
 
 
