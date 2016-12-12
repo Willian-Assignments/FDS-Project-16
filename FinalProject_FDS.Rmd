@@ -1,0 +1,765 @@
+---
+title: "Visualization, Time-series Analysis and Community Detection on CitiBike"
+output: 
+  html_document:
+    fig_caption: yes
+    number_sections: yes
+    toc: yes
+  html_notebook:
+    fig_caption: yes
+    highlight: pygments
+    number_sections: yes
+    theme: flatly
+    toc: yes
+author: "Yun Yan (yy1533@nyu.edu), Willian Zhang (willian@nyu.edu)"
+---
+
+```{r setup, echo=T, include=FALSE}
+knitr::opts_chunk$set(echo=T, error=F, warning=F, message=F)
+```
+
+# Goal and hypothesis
+
+We have the following general questions to examine whether they are possible:
+
+- Is there any specific purpose of people to use CitiBike?
+- Can we find a robust approach to indirectly study the hidden preference of human activities which cannot be directly observed.
+
+# Why Citibike trip data
+
+Here are three main reasons to select CitiBike trip data:
+
+1. Throughout the semester the course introduced many data science method, e.g. regression, clustering, time-series analysis, NLP, and network analysis, etc, we are looking for a wonderful data set which would allow us try the methods as many as possible.
+2. The context covered by the data set should not be unfamiliar to students, hence the solutions to challenges can be shared and have actual meanings in real life.
+3. The volume of data set should be small, though we don't require big data. In the same time, the format of data should be not dirty so that we can spend most of time on selecting appropriate method, tuning the parameters of algorithms, and examining the results to generate interpretations that make sense.
+
+# Tech details before running the RMD
+
+## Compile this RMD
+
+Run the following command in terminal:
+
+```bash
+Rscript -e "rmarkdown::render('FinalProject_FDS.Rmd')"
+```
+
+## Set-up and dependencies
+```{r}
+WORKDIR <- getwd()
+FIGDIR <- file.path(WORKDIR, 'fig')
+SRCDIR <- file.path(WORKDIR, 'src')
+DATADIR <- file.path(WORKDIR, 'data')
+if (!dir.exists(FIGDIR)) dir.create(FIGDIR)
+if (!dir.exists(SRCDIR)) dir.create(SRCDIR)
+if (!dir.exists(DATADIR)) dir.create(DATADIR)
+
+library('dplyr')
+library('reshape2')
+library('ggplot2')
+library('lubridate')
+library('readr')
+library('scales')
+library('cowplot')
+library('forecast')
+library('pheatmap')
+library('ggmap')
+library('igraph')
+library('NbClust')
+
+#theme_set(theme_bw(base_size = 12))
+myGthm <- theme(text = element_text(size = 15),
+                legend.position='bottom')
+```
+
+# Download or import data
+
+CitiBike data source is <https://s3.amazonaws.com/tripdata/index.html>. Here I provided a bash script to download and unzip data. 
+
+If you would like to run from scratch, please run following commands in terminal:
+
+```bash
+# go to work-directory of project (same as this RMD file)
+cd . 
+# create data folder
+mkdir -p data 
+cd ./src
+sh get_data.sh
+```
+
+If successful, CitiBike trip data set is available at folder data to be read in.
+```{r}
+infile <- list.files(path=file.path(getwd(), 'data'), pattern='*.csv',
+                     full.names = T)
+```
+
+```{r}
+data <- bind_rows(lapply(infile, function(x) {
+  read.csv(x, stringsAsFactors=FALSE)}))
+```
+
+Alternatively, I have attached a RDS file which is exactly same as the above. Load the RDS file if you don't want to download and avoid time on importing data.
+
+```r
+data <- readRDS(file.path(DATADIR, 'citibike.rds'))
+```
+```{r}
+# data <- read.csv(infile[1], stringsAsFactors = F)
+# data <- sample_frac(data, 0.1)
+```
+```{r}
+print(head(data))
+```
+
+There are 3 categories of features:
+
+1. geographic information. It contains where the trips starts and ends, i.e. the names of stations and longitude / latitude.
+2. time information. It contains when the trip starts and end.
+3. Information about users: age, female or male, member or one-time customer. 
+
+
+
+# Data formatting
+
+## Time
+
+The time information in raw data should be converted to time format recognized by R language.
+
+```{r}
+data$startTimestamp <- as.POSIXct(strptime(data$starttime, '%m/%d/%Y %H:%M',
+                                           tz = 'EST5EDT'))
+data$stopTimestamp  <- as.POSIXct(strptime(data$stoptime, '%m/%d/%Y %H:%M',
+                                           tz = 'EST5EDT'))
+data$startweekday <- factor(weekdays(data$startTimestamp),
+                            levels= c("Sunday", "Monday","Tuesday",
+                                      "Wednesday", "Thursday", "Friday",
+                                      "Saturday"))
+data$stopweekday <- factor(weekdays(data$stopTimestamp),
+                            levels= c("Sunday", "Monday","Tuesday",
+                                      "Wednesday", "Thursday", "Friday",
+                                      "Saturday"))
+data$startHr <- format(data$startTimestamp, '%H')
+data$stopHr <- format(data$stopTimestamp, '%H')
+```
+
+## Longitude / Latitude
+```{r}
+start_lat_min <- min(data$start.station.latitude)
+start_lat_max <- max(data$start.station.latitude)
+start_lon_min <- min(data$start.station.longitude)
+start_lon_max <- max(data$start.station.longitude)
+
+plot_lat_bt  <- start_lat_min - 2
+plot_lat_up  <- start_lat_max + 2
+plot_lon_lft <- start_lon_min - 2
+plot_lon_rit <- start_lon_max + 2
+```
+
+---
+**The below are results**
+# Visualize all available stations on map
+
+```{r}
+stations_start <- dplyr::select(data, starts_with('start.station')) %>% unique()
+stations_end <- dplyr::select(data, starts_with('end.station')) %>% unique()
+colnames(stations_start) <- colnames(stations_end) <- c('STATION_ID',
+                                                        'STATION_NAME',
+                                                        'STATION_LAT',
+                                                        'STATION_LON')
+stations <- rbind(stations_start, stations_end) %>% unique()
+rownames(stations) <- stations$STATION_NAME
+
+# reorder columns as stations_name should be first to create igraph
+stations <- dplyr::select(stations, STATION_NAME, STATION_ID,
+                          STATION_LAT, STATION_LON)
+
+map_stations_loc <- function(df,
+                             plot_lat_bt=38.68034, plot_lat_up=42.77152,
+                             plot_lon_lft=-76.01713, plot_lon_rit=-71.95005){
+  ## show stations on maps
+  # x is data frame for stations info
+  q <- qmplot(x=STATION_LON, y=STATION_LAT,
+              data = df,
+              maptype = 'toner-lite',
+              extent = 'device',
+              zoom = 14,
+              color=I('red'), alpha = I(.7))
+  return(q)
+}
+
+p_all_stations <- map_stations_loc(stations)
+print(p_all_stations)
+```
+
+# Visualizing trips to infer hidden pattern of biker preference
+
+Before I applied methods to analyze the data, it is essential to **see** the data. My philosophy is that if there are something playing important role, either itself or its consequences should also have high chances to be observed. Therefore, in order to investigate whether there exists hidden pattern of human activities, it is worthwhile to visualize the data set at first to explore the properties contained behind data set.
+
+```{r}
+q <-
+  qmplot(start.station.longitude, start.station.latitude,
+         data = data, maptype = "toner-lite",
+         geom = "blank", zoom = 14,
+         legend = "right") +
+  ggtitle('Pick-up') +
+  stat_density_2d(aes(fill = ..level..),
+                  geom = "polygon", alpha = .3, color = NA) +
+  scale_fill_gradient2("Activities",
+                       low = "ghostwhite", mid = "yellow", high = "red")
+```
+
+## Picking activity of Usertype (One-time Customer v.s. Member)
+```{r}
+## Only Usertype (2 types)
+q1 <- q + facet_wrap( ~ usertype)
+print(q1)
+```
+
+## Picking activity of Week ~ Usertype
+```{r}
+q2 <- q + facet_wrap(startweekday ~ usertype, ncol=8)
+print(q2)
+```
+
+## Picking activity in 24-hour of Member only during Weekdays
+
+```{r}
+subscriber <- data[data$usertype == 'Subscriber', ]
+
+## One-day at NYC (weekdays and weekends)
+weekdays_idx <- subscriber$startweekday %in% c("Monday","Tuesday",
+                                               "Wednesday", "Thursday", "Friday")
+weekends_idx <- !weekdays_idx
+subscriberWday <- subscriber[weekdays_idx, ]
+subscriberWend <- subscriber[weekends_idx, ]
+qSubWday <-
+  qmplot(start.station.longitude, start.station.latitude,
+         data = subscriberWday, maptype = "toner-lite",
+         geom = "blank", zoom = 14,
+         legend = "right") +
+  stat_density_2d(aes(fill = ..level..),
+                  geom = "polygon", alpha = .3, color = NA) +
+  scale_fill_gradient2("Pick-Up Activities",
+                       low = "ghostwhite", mid = "yellow", high = "red")
+
+qSubWday2 <- qSubWday + facet_wrap(~startHr, ncol=8)
+print(qSubWday2)
+```
+
+## Conclusions from visualization
+
+In first figure where picking activities all the time for Customer v.s. Member is displayed, it can be found that one-time customers pick up bikes without preferences, while the members have enriched regions, for example the station at 8th Ave & W 31 St, which is closest to Penn Station. It implies the existence of specific reason to use CitiBike, i.e. members tend to ride for daily commuting while one-time customers ride for fun.
+
+Furthermore, in the second figure where additional comparison on weekdays is displayed, it further supports the implication because the highlighted regions of members are stable and one-time customers are still present everywhere.
+
+Finally, by increasing the temporal resolution to hourly, the exact hours when activities of members are enriched can be found. In the early morning (6, 7, 8 AM, i.e. rush hour in the morning) the enriched regions fired up; they faded away during the day until the nightfall. At nightfall (5, 6 PM i.e. rush-hour), the enriched regions showed up again.
+
+In sum, there are two messages inferred by data visualization:
+
+1. There are hidden pattern of people to use CitiBike.
+2. Due to the hidden pattern of human activities, different station has its own temporal profile. For example, they have different rush-hours in terms of picking and docking.
+
+
+# Identify subgroups of stations with distinct temporal profiles
+
+## Convert long-format data into wide-format
+
+Each row in raw data  is a trip, so the raw data set is in long-format. In order to create temporal profiles of stations, the long-format should be summarized into wide-format.
+
+```{r}
+set.seed(1234)
+## Long-format to wide-format of citybike
+citibike_long2wide <- function(data, activity_type = c('pick', 'dock')){
+  if (activity_type == 'pick') {
+    station_24hr_long <- dplyr::select(data, start.station.name, startHr)
+  } else if (activity_type == 'dock') {
+    station_24hr_long <- dplyr::select(data, end.station.name, stopHr)
+  } else {
+    stop('Error: activity type is either pick or dock.')
+  }
+  colnames(station_24hr_long) <- c('NAME', 'HOUR')
+  station_24hr_long <- group_by(station_24hr_long, NAME, HOUR) %>%
+    summarise(TRIPS=n())
+  station_24hr_wide <- dcast(station_24hr_long, NAME~HOUR,
+                             value.var = 'TRIPS', sum, fill=0)
+  rownames(station_24hr_wide) <- station_24hr_wide$NAME
+  station_24hr_wide <- station_24hr_wide[, -1]
+  # print(head(station_24hr_wide))
+  return(station_24hr_wide)
+}
+pick_station_24hr <- citibike_long2wide(data=data, activity_type='pick')
+dock_station_24hr <- citibike_long2wide(data=data, activity_type='dock')
+```
+
+The original data set is summarized into two big matrices. One for picking, while the other is for docking. Each row is station and each column is the hour point. Example of wide-format matrix of pick activity is:
+
+```{r}
+print(head(pick_station_24hr[, 1:6]))
+```
+
+```{r, echo=F}
+## Hclust on 24hour activities of citybike picking and docking
+dist_metric <- 'euclidean'
+hclust_linkage <- 'complete'
+K = 10
+get_cluster_labels <- function(data, dist_metric, hclust_linkage, k){
+  hclust_station_24hr <- dist(data, method = dist_metric) %>%
+    hclust(method = hclust_linkage)
+
+  hclust_station_24hr_lab <- cutree(hclust_station_24hr, k = K)
+  ph_station_anno <- data.frame(CLUSTER=as.factor(hclust_station_24hr_lab))
+  rownames(ph_station_anno) <- names(hclust_station_24hr_lab)
+  return(ph_station_anno)
+}
+pick_station_24hr_anno <- get_cluster_labels(data=pick_station_24hr,
+                                             dist_metric=dist_metric,
+                                             hclust_linkage=hclust_linkage,
+                                             k=K)
+dock_station_24hr_anno <- get_cluster_labels(data=dock_station_24hr,
+                                             dist_metric=dist_metric,
+                                             hclust_linkage=hclust_linkage,
+                                             k=K)
+## Viz on 24hour activities of citybike picking and docking
+pdf(file.path(FIGDIR, 'pick_station_24hr_kmeans.pdf'), 10, 10)
+p_pick_kmeans <- pheatmap(pick_station_24hr,
+                          kmeans_k = K,
+                          cluster_cols = F,
+                          # show_rownames = F,
+                          main='24-hr Picking Activities')
+dev.off()
+
+pdf(file.path(FIGDIR, 'dock_station_24hr_kmeans.pdf'), 10, 10)
+p_dock_kmeans <- pheatmap(dock_station_24hr,
+                          kmeans_k = K,
+                          cluster_cols = F,
+                          # show_rownames = F,
+                          main='24-hr Docking Activities')
+dev.off()
+
+pdf(file.path(FIGDIR, 'pick_station_24hr_hclust.pdf'), 10, 10)
+p_pick_hclust <- pheatmap(pick_station_24hr,
+                          clustering_distance_rows = dist_metric,
+                          clustering_method = hclust_linkage,
+                          cutree_rows = K,
+                          annotation_row = pick_station_24hr_anno,
+                          cluster_cols = F,
+                          main='24-hr Picking Activities'
+)
+dev.off()
+pdf(file.path(FIGDIR, 'dock_station_24hr_hclust.pdf'), 10, 10)
+p_dock_hclust <- pheatmap(dock_station_24hr,
+                          clustering_distance_rows = dist_metric,
+                          clustering_method = hclust_linkage,
+                          cutree_rows = K,
+                          annotation_row = dock_station_24hr_anno,
+                          cluster_cols = F,
+                          main='24-hr Docking Activities'
+)
+dev.off()
+```
+
+## Visualize temporal profile of stations
+
+To visualize the matrix, here I selected top 20 stations with most picking activities for example.
+
+```{r}
+orderbyRowSum <- function(data){
+  o <- mutate(data, SUM=rowSums(data), row_names=rownames(data)) %>%
+    dplyr::arrange(desc(SUM), row_names) %>%
+    dplyr::select(-SUM)
+  rownames(o) <- o$row_names
+  o <- dplyr::select(o, -row_names)
+  return(o)
+}
+top_N <- 20
+pick_station_24hr_desc <- orderbyRowSum(pick_station_24hr)
+dock_station_24hr_desc <- orderbyRowSum(dock_station_24hr)
+top_pick_station_names <- rownames(pick_station_24hr_desc)[seq_len(top_N)]
+top_dock_station_names <- rownames(dock_station_24hr_desc)[seq_len(top_N)]
+desc_pick_station_names <- rownames(pick_station_24hr_desc)
+desc_dock_station_names <- rownames(dock_station_24hr_desc)
+pheatmap(pick_station_24hr_desc[top_pick_station_names, ],
+         cluster_rows = F, cluster_cols = F,
+         main='Picking activities of Stations with Top 24-hr Picking Activities')
+pheatmap(dock_station_24hr_desc[top_pick_station_names, ],
+         cluster_rows = F, cluster_cols = F,
+         main='Docking activities of Stations with Top 24-hr Picking Activities')
+```
+```{r, echo=F}
+pdf(file.path(FIGDIR, 'top_activity_station_24hr.pdf'), 10, 10)
+pheatmap(pick_station_24hr_desc[top_dock_station_names, ],
+         cluster_rows = F, cluster_cols = F,
+         main='Picking activities of Stations with Top 24-hr Docking Activities')
+pheatmap(dock_station_24hr_desc[top_dock_station_names, ],
+         cluster_rows = F, cluster_cols = F,
+         main='Docking activities of Stations with Top 24-hr Docking Activities')
+dev.off()
+```
+
+If compare the two matrices side-by-side, stations have different rush-hour:
+
+- High picking in early morning and high docking at nightfall (e.g. 8 Ave & W 31 St)
+- Stable activities throughout the day (e.g. Broadway & E 14 St)
+
+## P/D Index
+
+It can be inferred there exists other pattern, but it not straightforward to make conclusions from the two matrix above. Therefore, it is suggested to develop a metric to integrate the two information together. 
+
+Here is how P/D Index is calculated.
+
+1. Inputs are picking matrix and docking matrix with rows as stations.
+2. For each matrix, perform step 3 and 5 for normalization.
+3. For each row, calculate the max.
+4. For each row, the values are divided by the max.
+5. All values of matrix add one.
+6. The normalized picking matrix is divided by the normalized docking matrix to generate P/D index matrix.
+
+```{r}
+row_norm_byMax <- function(x){
+  t(apply(x, 1, function(r) {
+    r/max(r)
+  }))
+}
+pd_station_24hr <- (row_norm_byMax(pick_station_24hr)+1) / (row_norm_byMax(dock_station_24hr)+1)
+pd_station_24hr <- as.data.frame(pd_station_24hr)
+```
+
+The intuition of P/D index is that high P/D index suggests one of the following three situations:
+
+1. Higher picking activity.
+2. Lower docking activity.
+3. Both situation 1 and 2 happen in the same time.
+
+## Infer subgroups of stations by clustering on P/D index matrix
+
+The P/D index of the same stations as shown before is displayed in the following heat-map.
+
+```{r}
+pheatmap(pd_station_24hr[top_pick_station_names, ],
+         cluster_rows = F,
+         cluster_cols = F,
+         main='P/D Index of Stations with Top 24-hr Picking Activities')
+```
+
+```{r}
+print('P/D Index has average:')
+print(sum(pd_station_24hr)/prod(dim(pd_station_24hr)))
+```
+
+Now it is much more straightforward to infer possible subgroups of stations. Now I applied K-means for all about 300 stations to find the hidden subgroups of stations in terms of temporal profiles. 
+
+
+```{r}
+p_pd_kmeans <- pheatmap(pd_station_24hr,
+                        kmeans_k = K,
+                        cluster_cols = F,
+                        main='P/D Index of Stations')
+```
+
+```{r, echo=F}
+pdf(file.path(FIGDIR, 'pickVSdock_station_24hr.pdf'), 10, 10)
+pd_station_24hr_anno <- get_cluster_labels(data=pd_station_24hr,
+                                             dist_metric=dist_metric,
+                                             hclust_linkage=hclust_linkage,
+                                             k=K)
+tempt <- rownames(pick_station_24hr)
+tempt[!(tempt %in% top_pick_station_names[1:K])] <- ' '
+p_pd_hclust <- pheatmap(pd_station_24hr,
+                        clustering_distance_rows = dist_metric,
+                        clustering_method = hclust_linkage,
+                        cutree_rows = K,
+                        annotation_row = pd_station_24hr_anno,
+                        cluster_cols = F,
+                        labels_row = tempt,
+                        main='P/D Index of Stations')
+dev.off()
+```
+
+
+Therefore, there are at least 3 types of stations by P/D index in 24hr:
+
+- Type-A: High in morning & Low in evening: home-like stations
+- Type-B: Low in morning & High in evening: company-like stations
+- Type-C: Normal along day-light: no special usage
+- Type-X: Others
+
+
+```{r}
+rush_hr_morning_lab <- c('06', '07', '08')
+rush_hr_evening_lab <- c('16', '17', '18')
+# Manually extract clusters of interest
+# double-check before continue
+# pheatmap(p_pd_kmeans$kmeans$centers, cluster_cols = F)
+pd_kmeans_center <- p_pd_kmeans$kmeans$centers
+pd_kmeans_cluster <- p_pd_kmeans$kmeans$cluster
+## Type-1
+stations_type1_names <- names(pd_kmeans_cluster[pd_kmeans_cluster %in% c(5, 9)])
+p_station_type1 <- dplyr::filter(stations, STATION_NAME %in% stations_type1_names) %>%
+  map_stations_loc()
+## Type-2
+stations_type2_names <- names(pd_kmeans_cluster[pd_kmeans_cluster %in% c(4, 8, 10)])
+p_station_type2 <- dplyr::filter(stations, STATION_NAME %in% stations_type2_names) %>%
+  map_stations_loc()
+## Type-3
+stations_type3_names <- names(pd_kmeans_cluster[pd_kmeans_cluster %in% c(2, 6)])
+p_station_type3 <- dplyr::filter(stations, STATION_NAME %in% stations_type3_names) %>%
+  map_stations_loc()
+## Type-4 unknown: the rest stations
+stations_types_summary <- rep('X', NROW(stations))
+stations_types_summary[stations$STATION_NAME %in% stations_type1_names] <- LETTERS[1]
+stations_types_summary[stations$STATION_NAME %in% stations_type2_names] <- LETTERS[2]
+stations_types_summary[stations$STATION_NAME %in% stations_type3_names] <- LETTERS[3]
+```
+
+## Visualize subgroups of stations on map
+
+```{r}
+stations_byTypes <- dplyr::mutate(stations, TYPE=stations_types_summary)
+p_stations_byTypes <- qmplot(x=STATION_LON, y=STATION_LAT,
+                             data = stations_byTypes,
+                             maptype = 'toner-lite',
+                             extent = 'device',
+                             zoom = 14,
+                             color=TYPE,
+                             size=I(2.5))
+print(p_stations_byTypes)
+```
+
+## Summary of subgroup of stations
+
+First, I developed P/D index to integrate the picking and docking activities as a straightforward metric to reflect the temporal profile of stations.
+
+Second, by performing clustering on hourly P/D index matrix of stations, the stations with different hourly activities formed several distinct subgroups. Among them, the Type-A is likely to be home-like stations, and Type-B is like company-like stations, and Type-C is regular stations. 
+
+Finally, by grouping stations into different groups, I can figure out suggestions to CitiBike company to better manually balance bike among stations.
+
+# Time-series Analysis of stations
+
+Stations have different "rush-hour", therefore, it is worthwhile to treat them differently and perform time-series analysis to model the temporal profile for possible forecasting.
+
+Here I performed time-series analysis and use AR(4) model to fit the usage at specific station.
+
+Prepare observed usage at specific station.
+```{r}
+s <- stations_type1_names[1]
+sid <- dplyr::filter(stations, STATION_NAME == s) %>%
+  select(STATION_ID) %>% as.numeric()
+print(s)
+# Month of interest
+m <- 'Jan'
+
+# station-date-hour-trips data.frame
+# Note: in some hour point, there is no activity at all thus need set them as zero
+pick_s_days_avail <- dplyr::filter(data,
+                                   start.station.name %in% s,
+                                   month(startTimestamp, label=T) == m) %>%
+  mutate(DATE=date(startTimestamp)) %>%
+  group_by(start.station.name, DATE, startHr) %>%
+  summarise(TRIPS=n()) %>% as.data.frame()
+colnames(pick_s_days_avail) <- c('STATION_NAME', 'DATE', 'HOUR', 'TRIPS')
+
+pick_s_days_grid <- expand.grid(STATION_NAME=s,
+                                DATE=unique(pick_s_days_avail$DATE),
+                                HOUR=sprintf("%02d", 0:23),
+                                TRIPS=0)
+pick_s_days <- bind_rows(pick_s_days_avail, pick_s_days_grid) %>%
+  group_by(STATION_NAME, DATE, HOUR) %>%
+  summarise(NTRIPS=sum(TRIPS)) %>%
+  mutate(TIMESTAMP=ymd_h(paste(DATE, HOUR), tz='EST5EDT'),
+         YEAR=year(DATE))
+```
+
+
+```{r}
+obs_trips <- as.numeric(pick_s_days$NTRIPS)
+ar4 <- ar(obs_trips, F, 4)
+fit_trips <- fitted(ar4)
+fit_trips[seq_len(4)] <- obs_trips[seq_len(4)]
+
+pick_s_days_ar <- ungroup(pick_s_days) %>% dplyr::select(DATE, HOUR, YEAR) %>%
+  mutate(OBS=obs_trips, FIT=fit_trips) %>%
+  melt(id.vars=c('DATE', 'HOUR', 'YEAR'), value.name='NTRIPS',
+       variable.name='Type')
+```
+
+```{r}
+p_pick_s_ar <- ggplot(pick_s_days_ar, aes(x=DATE, y=HOUR, fill=NTRIPS)) +
+  geom_tile(color = "white", size = 0.4) +
+  scale_fill_gradient(low="ghostwhite", high="red") +
+  scale_x_date(date_breaks="1 week",  date_labels="%d-%b-%y") +
+  facet_grid(YEAR~Type) +
+  xlab('') + ylab('Hour') + labs(fill='Trips') +
+  ggtitle(paste0('Observed and AR(4) fitted picking activity at ', s))
+print(p_pick_s_ar)
+```
+
+
+By the AR(4) model, the temporal profile of the specific station is created. If needed, the CitiBike company can predict the future usage by this model.
+
+# Community detection of stations
+
+There is a directed weighted graph behind the raw data set. Each station can be considered as the node, and the trip can be the directed edge. Number of trips between stations denotes the weight of each edge. 
+
+Therefore, it is suggested to run community detection algorithm with following two goals:
+
+- Investigate general direction of CitiBike flow, and further support the results of station clustering;
+- Investigate the partitions of New York City in terms of human activities, rather than administrative regions.
+
+
+The algorithm used here is called Info-map, which is built-in function in `igraph` package. Betweenness-based method is not used, as it is much more time-consuming.
+
+## Build directed weighted graph from data
+```{r}
+net0_edges_wt <- group_by(data, start.station.name, end.station.name) %>%
+  summarise(TRIPS=n()) %>%
+  ungroup() %>% as.data.frame()
+colnames(net0_edges_wt) <- c('from', 'to', 'weight')
+
+stations <- dplyr::select(stations, STATION_NAME, STATION_ID,
+                          STATION_LAT, STATION_LON)
+net0 <- graph_from_data_frame(d=net0_edges_wt,
+                              directed=T,
+                              vertices=stations)
+E(net0)$width <- E(net0)$weight / 10
+E(net0)$arrow.size <- .2
+E(net0)$edge.color <- "gray80"
+```
+```{r, echo=FALSE}
+pdf(file.path(FIGDIR, 'network_stations_raw.pdf'), 10, 10)
+plot(net0)
+dev.off()
+
+net_simplify <- simplify(net0, remove.multiple = T, remove.loops = F,
+                         edge.attr.comb=list(weight="sum","ignore"))
+pdf(file.path(FIGDIR, 'network_stations_noMultiple_noLoop.pdf'), 10, 10)
+plot(net_simplify)
+dev.off()
+
+net_undirected <- as.undirected(net0, mode= "collapse",
+                                edge.attr.comb=list(weight="sum", "ignore"))
+E(net_undirected)$width <- E(net_undirected)$weight / 10
+pdf(file.path(FIGDIR, 'network_stations_forcedUndirected.pdf'), 10, 10)
+plot(net_undirected, edge.arrow.size=0.2, edge.color='gray80')
+dev.off()
+```
+
+## Perform community detection on full graph
+```{r}
+community_detect_stations <- function(net, nodes_geo,
+                                      method=c('infomap', 'betweenness')){
+  if (method == 'infomap'){
+    imc <- cluster_infomap(net)
+    memb <- membership(imc)
+  } else if (method == 'betweenness') {
+    ebc <- cluster_edge_betweenness(net)
+    memb <- membership(ebc)
+  } else {
+    stop('Unknown method for community detection')
+  }
+  stations_community <- data.frame(STATION_NAME=names(memb),
+                                   COMMUNITY=factor(memb))
+  p_community <- left_join(x=stations_community, y=nodes_geo,
+                           by=c('STATION_NAME')) %>%
+    qmplot(data = ., x=STATION_LON, y=STATION_LAT,
+           maptype = 'toner-lite',
+           extent = 'device',
+           zoom = 14,
+           color=COMMUNITY, shape=COMMUNITY, size=I(2.5))
+}
+```
+
+```{r}
+p_community_infomap_nyc <- community_detect_stations(net=net0,
+                                                     nodes_geo=stations,
+                                                     method='infomap')
+```
+```{r}
+print(p_community_infomap_nyc)
+```
+
+It is not surprising to see the entire New York City is partitioned into Manhattan and Brooklyn communities based on the full data set.
+
+## Community detection on only Type-A and Type-B stations
+
+Type-A is home-like station and Type-B is company-like station.
+
+```{r}
+net_stations_typeAnB <- induced.subgraph(net0, vids=c(stations_type1_names,
+                                                    stations_type2_names))
+p_community_infomap_typeAnB <- community_detect_stations(net=net_stations_typeAnB,
+                                                         nodes_geo=stations,
+                                                         method='infomap')
+print(p_community_infomap_typeAnB)
+```
+
+In Manhattan, there are 2 big communities. The two communities are generally separated by 23th Street. That is to say, for example, the Type-A stations around Penn Stations are more likely to reach destinations in East side and will not go to downtown's direction. And Type-A stations around Avenue A & E 10th Street are more likely to go to Wall Street areas.
+
+
+# Model evaluation
+
+There are two layers of evaluation.
+
+1. Evaluate the whether the results are correct.
+2. Evaluate the performance of method.
+
+For first issue, the answer is no. Because this project is mostly data-driven, though I did start from a hypothesis that the activity at stations reflects the hidden pattern of human preference, the entire analysis is exploratory and there is no golden-standard for evaluating whether these findings are true. The argument for evaluating the results from unsupervised machine learning can be applied to this project. 
+Exploratory data analysis does not mean there is no way to evaluate whether method is appropriate, so the second issue is answered yes. Throughout the project there are several sections to monitor the performance.
+
+For example, in order to infer the appropriate number of clusters when performing K-means on 24-hour P/D index matrix, I used **silhouette** metric, which is implemented in `NbClust` package.
+
+```{r}
+pd_station_K <- NbClust(data = pd_station_24hr, 
+                        min.nc=3, max.nc=20, method='kmeans', index='silhouette')
+```
+```{r}
+plot_nbclust_obj <- function(nbclust_obj){
+  nbclust_stats_k <- as.numeric(names(nbclust_obj$All.index))
+  nbclust_stats_val <- as.numeric(nbclust_obj$All.index)
+  nbclust_stats_val[is.na(nbclust_stats_val)] <- 0
+  plot(x=nbclust_stats_k, y=nbclust_stats_val, type="b",
+       xlab="Number of possible clusters",
+       ylab='silhouette',
+       main="Infer the best number of clusters")
+}
+```
+```{r}
+plot_nbclust_obj(pd_station_K)
+```
+
+Because I would manually investigate the clustered heat-map to pick up the groups to define Type-A, Type-B and Type-C stations, it is ok to manually set K as 10 at first. The results of 3 types are consistent to automatically set K as 3, inferred from the model evaluation part. 
+
+# Final Conclusions
+
+Human activities cannot be observed directly, but the picking and docking activities at stations provide indirect yet robust data for us to investigate the hidden pattern. First it can be inferred from data visualization part that there exists possible hidden pattern of people to use CitiBike. Second, the hypothesis is proven by looking at the temporal profiles of about 300 stations. The temporal profiles are based on P/D index, which is a novel metric for merging picking and docking information together and provides a straightforward method for data analysis. In addition, we modeled the "rush-hour" properties of specific station as a example to suggest a time-schedule for CitiBike company to manually balance bikes at the specific station. Finally, we identified the communities of stations by performing Info-map algorithm and the communities are roughly consistent to the administrative regions around New York City, which suggest our findings are robust.
+
+# Further work
+
+Future work is to find whether there are stations of which the temporal profile changes after some year. For example, station-X during 2013-2015 is Type-A station, i.e. home-like station. But all of a sudden, since 2016, the temporal profile of station-X changed to Type-C station, i.e. stable through all the day. It would suggest either the neighborhood got entirely changed, or the major transportation station got changed. The meaning is that without directly investigating the hidden pattern of human activities, we can still have an indirect approach to capture the changes. 
+
+# Contributions
+
+**Yun Yan**
+
+- CitiBike data visualization on yearly, weekly, hourly data
+- CitiBike data visualization on comparing Member with one-time Customer
+- P/D index
+- Identify subgroups of stations based on P/D index clustering
+- Time-series analysis by using AR
+- Community detection
+
+**Willian Zhang**
+
+- Project discussion
+
+# Codes
+
+<https://github.com/Puriney/ineedabike>
+
+# Clarification
+
+All works described in Project Proposal have been finished, including the optional one (network analysis). During presentation day, only first part (data visualization) and second part (subgroups of stations) are introduced, while the third and final part (time series analysis and community detection) are not because of running out time. But the same content can be found in the submitted presentation slide file.
+
+
+
+
+
+
