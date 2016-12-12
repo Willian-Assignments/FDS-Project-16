@@ -758,7 +758,11 @@ Future work is to find whether there are stations of which the temporal profile 
 
 All works described in Project Proposal have been finished, including the optional one (network analysis). During presentation day, only first part (data visualization) and second part (subgroups of stations) are introduced, while the third and final part (time series analysis and community detection) are not because of running out time. But the same content can be found in the submitted presentation slide file.
 
+# Session-info
 
+```{r}
+sessionInfo()
+```
 
 
 
