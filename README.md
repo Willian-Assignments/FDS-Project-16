@@ -15,6 +15,6 @@ This is course project of NYU Foundation of Data Science (Fall 2016) Project: Ex
 
 **Willian Zhang** (willian@nyu.edu)
 
-- Project discussion
+- Explore potentially new CitiBike sites
 
 
