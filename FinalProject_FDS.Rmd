@@ -24,6 +24,7 @@ We have the following general questions to examine whether they are possible:
 
 - Is there any specific purpose of people to use CitiBike?
 - Can we find a robust approach to indirectly study the hidden preference of human activities which cannot be directly observed.
+- Can we predict where to set new stations when CitiBike needs to expend their services
 
 # Why Citibike trip data
 
@@ -32,6 +33,15 @@ Here are three main reasons to select CitiBike trip data:
 1. Throughout the semester the course introduced many data science method, e.g. regression, clustering, time-series analysis, NLP, and network analysis, etc, we are looking for a wonderful data set which would allow us try the methods as many as possible.
 2. The context covered by the data set should not be unfamiliar to students, hence the solutions to challenges can be shared and have actual meanings in real life.
 3. The volume of data set should be small, though we don't require big data. In the same time, the format of data should be not dirty so that we can spend most of time on selecting appropriate method, tuning the parameters of algorithms, and examining the results to generate interpretations that make sense.
+4. The geographical information of CitiBike data correlate well with NYC Taxi data.
+
+# Hypothesis 
+
+- The `dropoff` data for Taxi data better represents actual needs for trips to take from.
+This Hypothesis is safe to make due to:
+  - We don't actually look at the direction of people traveling, we do look is the spot
+  - We care about the geolocation the `need` is from, the `dropoff` data reflects this more than `pickup` since people are more close to `from dropoff spot to there destinition` to `from they want to get a taxi to they actaully get one or even can't get one`
+  - What we want to predict is new stations for CitiBike. Stations are stationary: once done, it's there regardless of the time. (Unlike taxies are mobile during a day) 
 
 # Tech details before running the RMD
 
@@ -748,7 +758,8 @@ Future work is to find whether there are stations of which the temporal profile 
 
 **Willian Zhang**
 
-- Project discussion
+- NYC Taxi data visualization
+- CitiBike potential new sites discovery by Taxi
 
 # Codes
 
