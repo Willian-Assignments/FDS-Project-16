@@ -83,7 +83,9 @@ myGthm <- theme(text = element_text(size = 15),
 
 # Download or import data
 
-CitiBike data source is <https://s3.amazonaws.com/tripdata/index.html>. Here I provided a bash script to download and unzip data. 
+CitiBike data source is <https://s3.amazonaws.com/tripdata/index.html>.
+NYC Taxi data source is <http://www.nyc.gov/html/tlc/html/about/trip_record_data.shtml>.
+Here we provided bash scripts to download and unzip data. 
 
 If you would like to run from scratch, please run following commands in terminal:
 
@@ -93,12 +95,15 @@ cd .
 # create data folder
 mkdir -p data 
 cd ./src
+# You may want to modify the sh file to include/exclude datas
 sh get_data.sh
+sh get_data_taxi.sh
 ```
 
+## CitiBike data import
 If successful, CitiBike trip data set is available at folder data to be read in.
 ```{r}
-infile <- list.files(path=file.path(getwd(), 'data'), pattern='*.csv',
+infile <- list.files(path=file.path(DATADIR), pattern='*-citibike-tripdata.csv',
                      full.names = T)
 ```
 
@@ -107,6 +112,25 @@ data <- bind_rows(lapply(infile, function(x) {
   read.csv(x, stringsAsFactors=FALSE)}))
 ```
 
+## NYC data import
+```{r}
+use.RDS.for.taxi  <- TRUE
+RDS.name.for.taxi <- 'taxi.RDS'
+
+trip.data <- 
+  if(use.RDS.for.taxi){
+    readRDS(file.path(DATADIR, RDS.name.for.taxi))
+  }else{
+    infile.taxi <- list.files(path=file.path(DATADIR), pattern='\\S*_tripdata_\\d{4}-\\d{2}\\.csv',
+                              full.names = T)
+    bind_rows(lapply(infile.taxi, function(x) {
+                                read.csv(x, stringsAsFactors=FALSE)}))
+  }
+head(trip.data)
+```
+
+
+## RDS import for CitiBike
 Alternatively, I have attached a RDS file which is exactly same as the above. Load the RDS file if you don't want to download and avoid time on importing data.
 
 ```r
