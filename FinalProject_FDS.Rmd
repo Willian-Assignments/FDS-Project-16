@@ -1037,7 +1037,7 @@ Stations.should.be.here <- function(){
                                      size = as.numeric(all.stations.should.kmeans$size))
                         ) + theme(legend.position="none")
 }
-save.and.print(Taxi.Need.Clustering, "Stations.should.be.here.pdf")
+save.and.print(Stations.should.be.here, "Stations.should.be.here.pdf")
 ```
 
 
