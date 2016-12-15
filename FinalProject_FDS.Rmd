@@ -997,14 +997,54 @@ taxi.k.means.statitcs.MCD <- plyr::laply(1:taxi.max.k,
                                      )
 ```
 
+```{r}
+taxi.k.means.statitcs.MCD<- data.frame(taxi.k.means.statitcs.MCD)
+taxi.k.means.statitcs.MCD$k <- 1:taxi.max.k
+colnames(taxi.k.means.statitcs.MCD) <- c("MCD","k")
+
+Taxi.MCD.by.different.K <- function(){
+  closer <- taxi.k.means.statitcs[3:30,]
+  k <- as.numeric(row.names(closer))
+  ggplot2::ggplot(closer, main = "Taxi MCD by different K")+
+    ggplot2::geom_line(ggplot2::aes(x = k, y = MCD))
+}
+save.and.print(
+  Taxi.Withingness.And.Betweeness.by.different.K.Closer,
+  "Taxi.Withingness.And.Betweeness.by.different.K.closer.pdf"
+)
+```
+
+## There should be station here
+
+```{r}
+k=k.from.MCD
+all.stations.should.kmeans <- kmeans(trip.data[,8:9],k, iter.max=200, algorithm="MacQueen")
+
+all.stations.should.kmeans$cluster <- as.factor(all.stations.should.kmeans$cluster)
+Stations.should.be.here <- function(){
+  ggmap::ggmap(map, main = "Stations should be here") + 
+    ggplot2::geom_point(data = trip.data, shape = ".",
+                        ggplot2::aes(Dropoff_longitude, Dropoff_latitude, color = as.factor(all.stations.should.kmeans$cluster))
+                        )+
+    ggplot2::geom_point(data = as.data.frame(all.stations.should.kmeans$centers), shape = 21,
+                        ggplot2::aes(Dropoff_longitude, Dropoff_latitude,
+                                     fill = as.factor(row.names(all.stations.should.kmeans$centers)),
+                                     size = as.numeric(all.stations.should.kmeans$size))
+                        ) + theme(legend.position="none")
+}
+save.and.print(Taxi.Need.Clustering, "Stations.should.be.here.pdf")
+```
+
 
 # Final Conclusions
 
 Human activities cannot be observed directly, but the picking and docking activities at stations provide indirect yet robust data for us to investigate the hidden pattern. First it can be inferred from data visualization part that there exists possible hidden pattern of people to use CitiBike. Second, the hypothesis is proven by looking at the temporal profiles of about 300 stations. The temporal profiles are based on P/D index, which is a novel metric for merging picking and docking information together and provides a straightforward method for data analysis. In addition, we modeled the "rush-hour" properties of specific station as a example to suggest a time-schedule for CitiBike company to manually balance bikes at the specific station. Finally, we identified the communities of stations by performing Info-map algorithm and the communities are roughly consistent to the administrative regions around New York City, which suggest our findings are robust.
+New CitiBike Stations should be added, since there are so much needs and only parts of them are fullfilled. 
 
 # Further work
 
 Future work is to find whether there are stations of which the temporal profile changes after some year. For example, station-X during 2013-2015 is Type-A station, i.e. home-like station. But all of a sudden, since 2016, the temporal profile of station-X changed to Type-C station, i.e. stable through all the day. It would suggest either the neighborhood got entirely changed, or the major transportation station got changed. The meaning is that without directly investigating the hidden pattern of human activities, we can still have an indirect approach to capture the changes. 
+An order of new Stations can be figured. For this, meausre of renevues are needed, this can be done once estimate of income from each stations are available.
 
 # Contributions
 
