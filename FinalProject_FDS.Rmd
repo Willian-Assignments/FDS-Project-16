@@ -995,29 +995,34 @@ taxi.k.means.statitcs.MCD <- plyr::laply(1:taxi.max.k,
                                      taxi.collect.kmean.statistics.MCD,
                                      .progress= plyr::progress_text(char = '+')
                                      )
-```
-
-```{r}
 taxi.k.means.statitcs.MCD<- data.frame(taxi.k.means.statitcs.MCD)
 taxi.k.means.statitcs.MCD$k <- 1:taxi.max.k
 colnames(taxi.k.means.statitcs.MCD) <- c("MCD","k")
+```
 
+
+```{r}
 Taxi.MCD.by.different.K <- function(){
-  closer <- taxi.k.means.statitcs[3:30,]
-  k <- as.numeric(row.names(closer))
-  ggplot2::ggplot(closer, main = "Taxi MCD by different K")+
+  k <- as.numeric(row.names(taxi.k.means.statitcs.MCD))
+  ggplot2::ggplot(taxi.k.means.statitcs.MCD, main = "Taxi MCD by different K")+
     ggplot2::geom_line(ggplot2::aes(x = k, y = MCD))
 }
 save.and.print(
-  Taxi.Withingness.And.Betweeness.by.different.K.Closer,
-  "Taxi.Withingness.And.Betweeness.by.different.K.closer.pdf"
+  Taxi.MCD.by.different.K,
+  "Taxi.MCD.by.different.K.pdf"
 )
 ```
+
+### Best k
+```{r}
+taxi.k.means.statitcs.MCD[taxi.k.means.statitcs.MCD$MCD<mean.station.closest.distance,]
+```
+
 
 ## There should be station here
 
 ```{r}
-k=k.from.MCD
+k=300
 all.stations.should.kmeans <- kmeans(trip.data[,8:9],k, iter.max=200, algorithm="MacQueen")
 
 all.stations.should.kmeans$cluster <- as.factor(all.stations.should.kmeans$cluster)
