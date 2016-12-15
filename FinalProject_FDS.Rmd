@@ -965,7 +965,7 @@ I've developed an metrix for measuring *Distance of Stations*: Mean squared Clos
 MCD <- function(points){
   # Calculate Distance Matrix
   distance.matrix <- function(points, func){
-    apply(points, 1, function(p1) apply(points, 1, function(p2) func(p1, p2)))
+    as.matrix(apply(points, 1, function(p1) apply(points, 1, function(p2) func(p1, p2))))
   }
   point.distances <- distance.matrix(points, fun = 
                                        function(x,y) (x[1]-y[1])^2 + (x[2]-y[2])^2
