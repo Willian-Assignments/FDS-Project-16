@@ -868,17 +868,21 @@ Now let's find a optimium value of k using elbow mothod.
 #### Get statistics for different k means
 This is where computation gets *time consumeing*, so I decide to run it on sample data set instead of a whole one.
 ```{r}
-taxi.k.means.statitcs <- data.frame(1:200)
-colnames(taxi.k.means.statitcs) <- c("k")
+taxi.k.numbers <- 1:80
+
 taxi.collect.kmean.statistics <- function (k) {
   kmean.result <- kmeans(trip.data.sample[,8:9],centers = k, iter.max = max(100,k*2), algorithm="MacQueen")
   c( kmean.result$tot.withinss, kmean.result$betweenss )
 }
-taxi.k.means.statitcs <- apply(taxi.k.means.statitcs,1, taxi.collect.kmean.statistics)
+taxi.k.means.statitcs <- plyr::laply(taxi.k.numbers, 
+                                     taxi.collect.kmean.statistics,
+                                     .progress= plyr::progress_text(char = '+')
+                                     )
 
 # Set label
-taxi.k.means.statitcs <- as.data.frame(t(taxi.k.means.statitcs))
+taxi.k.means.statitcs <- as.data.frame(taxi.k.means.statitcs)
 colnames(taxi.k.means.statitcs) <- c("Withiness","Betweeness")
+row.names(taxi.k.means.statitcs) <- taxi.k.numbers
 
 # Transform to mean value instead of sum
 taxi.k.means.statitcs$Withiness <- taxi.k.means.statitcs$Withiness/taxi.sample.size
@@ -904,7 +908,7 @@ Red for Betweeness and Blue for Withiness.
 #### A Closer look
 ```{r}
 Taxi.Withingness.And.Betweeness.by.different.K.Closer <- function(){
-  closer <- taxi.k.means.statitcs[3:20,]
+  closer <- taxi.k.means.statitcs[3:30,]
   k <- as.numeric(row.names(closer))
   ggplot2::ggplot(closer, main = "Taxi Withingness And Betweeness by different K - Closer")+
     ggplot2::geom_line(ggplot2::aes(x = k, y = Withiness), color = "blue")+
@@ -916,11 +920,12 @@ save.and.print(
 )
 ```
 Red for Betweeness and Blue for Withiness.
-So we pick up k = 6 
+So we pick up k = 7 
 
 # Cluster on whole Taxi dataset
 ```{r}
-t.k.s.d <- kmeans(trip.data[,8:9],6, iter.max=200, algorithm="MacQueen")
+k=7
+t.k.s.d <- kmeans(trip.data[,8:9],k, iter.max=200, algorithm="MacQueen")
 
 t.k.s.d$cluster <- as.factor(t.k.s.d$cluster)
 Taxi.Need.Clustering <- function(){
@@ -948,8 +953,49 @@ print(p_all_stations)
 ```
 In specific, why do they put all stations so close to each other?
 The Answer is simple: People *walk* to nearby stations to get bikes!
-In other words: Distance is very *limited*!
+In other words: *Distance* is very *limited*!
+So the key to what Taxi data should take standard for *k* value adoption can be infered from *Distance of Stations* already exist
 
+## MCD of  Stations
+
+I've developed an metrix for measuring *Distance of Stations*: Mean squared Close Distance (MCD)
+
+```{r}
+# MCD
+MCD <- function(points){
+  # Calculate Distance Matrix
+  distance.matrix <- function(points, func){
+    apply(points, 1, function(p1) apply(points, 1, function(p2) func(p1, p2)))
+  }
+  point.distances <- distance.matrix(points, fun = 
+                                       function(x,y) (x[1]-y[1])^2 + (x[2]-y[2])^2
+                                     )
+  
+  # Find Nearest Distance
+  min.no <- function(A) min(A[A>0])
+  point.closest.distance <- apply(point.distances, 1, min.no)
+  
+  # Mean
+  mean.point.closest.distance <- mean(point.closest.distance)
+  mean.point.closest.distance
+}
+
+mean.station.closest.distance <- MCD(stations[,c('STATION_LON','STATION_LAT')])
+print(paste("MCD of Stations:", mean.station.closest.distance))
+```
+
+## MCD over k on Taxi Data
+```{r}
+taxi.max.k <- 500
+taxi.collect.kmean.statistics.MCD <- function (k) {
+  kmeans.result <- kmeans(trip.data.sample[,8:9],centers = k, iter.max = max(100,k*2), algorithm="MacQueen")
+  MCD(kmeans.result$centers)
+}
+taxi.k.means.statitcs.MCD <- plyr::laply(1:taxi.max.k, 
+                                     taxi.collect.kmean.statistics.MCD,
+                                     .progress= plyr::progress_text(char = '+')
+                                     )
+```
 
 
 # Final Conclusions
