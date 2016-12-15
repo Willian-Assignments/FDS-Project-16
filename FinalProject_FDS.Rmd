@@ -797,7 +797,7 @@ latitude.summary <-  min.and.max(c(
 ```
 
 ### Featch Map
-```{r, message=FALSE, eval=FALSE}
+```{r, message=FALSE}
 map <- ggmap::get_stamenmap(bbox = c(left = longitude.summary[1],
                                          bottom=latitude.summary[1],
                                          right= longitude.summary[2],
