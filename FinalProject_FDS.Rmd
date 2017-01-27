@@ -729,7 +729,9 @@ Because I would manually investigate the clustered heat-map to pick up the group
 
 # Final Conclusions
 
-Human activities cannot be observed directly, but the picking and docking activities at stations provide indirect yet robust data for us to investigate the hidden pattern. First it can be inferred from data visualization part that there exists possible hidden pattern of people to use CitiBike. Second, the hypothesis is proven by looking at the temporal profiles of about 300 stations. The temporal profiles are based on P/D index, which is a novel metric for merging picking and docking information together and provides a straightforward method for data analysis. In addition, we modeled the "rush-hour" properties of specific station as a example to suggest a time-schedule for CitiBike company to manually balance bikes at the specific station. Finally, we identified the communities of stations by performing Info-map algorithm and the communities are roughly consistent to the administrative regions around New York City, which suggest our findings are robust.
+Human activities cannot be observed directly, but the picking and docking activities at stations provide indirect yet robust data for us to investigate the hidden pattern. 
+
+First it can be inferred from data visualization part that there exists possible hidden pattern of people to use CitiBike. Second, the hypothesis is proven by looking at the temporal profiles of about 300 stations. The temporal profiles are based on P/D index, which is a novel metric for merging picking and docking information together and provides a straightforward method for data analysis. In addition, we modeled the "rush-hour" properties of specific station as a example to suggest a time-schedule for CitiBike company to manually balance bikes at the specific station. Finally, we identified the communities of stations by performing Info-map algorithm and the communities are roughly consistent to the administrative regions around New York City, which suggest our findings are robust.
 
 # Further work
 
@@ -756,7 +758,7 @@ Future work is to find whether there are stations of which the temporal profile 
 
 # Clarification
 
-All works described in Project Proposal have been finished, including the optional one (network analysis). During presentation day, only first part (data visualization) and second part (subgroups of stations) are introduced, while the third and final part (time series analysis and community detection) are not because of running out time. But the same content can be found in the submitted presentation slide file.
+All 3 proposed parts of work described in Project Proposal have been finished, so is the optional part (network analysis). During presentation day, only first part (data visualization) and second part (subgroups of stations) were introduced, while the third and final part (time series analysis and community detection) were not because of running out of presentation time. The same content in this project report can also be found in the submitted presentation slide file.
 
 # Session-info
 
