@@ -2,7 +2,7 @@
 ## Perform clustering on stations pick/dock 24-hr activities
 ## Goal is to find groups/clusters of stations with different usage pattern
 ##
-
+set.seed(1234)
 ## Long-format to wide-format of citybike
 citibike_long2wide <- function(data, activity_type = c('pick', 'dock')){
   if (activity_type == 'pick') {
@@ -158,4 +158,67 @@ p_pd_hclust <- pheatmap(pd_station_24hr,
                         labels_row = tempt,
                         main='P/D Index of Stations')
 dev.off()
+
+# P/D index has mean as 1.0313 which suggests balance
+# Fluatation (not exactly equals to 1.00) might be due to:
+# 1) company is manually balancing stations with back-up bikes
+# 2) customers are not always returning bike successfully
+print('P/D Index has average:')
+print(sum(pd_station_24hr)/prod(dim(pd_station_24hr)))
+
+
+##
+## There are at least 3 types of stations by P/D index in 24hr:
+## 1. High in morning & Low in evening: source of working people
+## 2. Low in morning & High in evening: destination of working people
+## 3. Normal along day-light: no special usage
+##
+rush_hr_morning_lab <- c('06', '07', '08')
+rush_hr_evening_lab <- c('16', '17', '18')
+# Manually extract clusters of interest
+# double-check before continue
+pheatmap(p_pd_kmeans$kmeans$centers, cluster_cols = F)
+pd_kmeans_center <- p_pd_kmeans$kmeans$centers
+pd_kmeans_cluster <- p_pd_kmeans$kmeans$cluster
+## Type-1
+stations_type1_names <- names(pd_kmeans_cluster[pd_kmeans_cluster %in% c(5, 9)])
+p_station_type1 <- dplyr::filter(stations, STATION_NAME %in% stations_type1_names) %>%
+  map_stations_loc()
+## Type-2
+stations_type2_names <- names(pd_kmeans_cluster[pd_kmeans_cluster %in% c(4, 8, 10)])
+p_station_type2 <- dplyr::filter(stations, STATION_NAME %in% stations_type2_names) %>%
+  map_stations_loc()
+## Type-3
+stations_type3_names <- names(pd_kmeans_cluster[pd_kmeans_cluster %in% c(2, 6)])
+p_station_type3 <- dplyr::filter(stations, STATION_NAME %in% stations_type3_names) %>%
+  map_stations_loc()
+## Type-4 unknown: the rest stations
+
+stations_types_summary <- rep('X', NROW(stations))
+stations_types_summary[stations$STATION_NAME %in% stations_type1_names] <- LETTERS[1]
+stations_types_summary[stations$STATION_NAME %in% stations_type2_names] <- LETTERS[2]
+stations_types_summary[stations$STATION_NAME %in% stations_type3_names] <- LETTERS[3]
+stations_byTypes <- dplyr::mutate(stations, TYPE=stations_types_summary)
+p_stations_byTypes <- qmplot(x=STATION_LON, y=STATION_LAT,
+                             data = stations_byTypes,
+                             maptype = 'toner-lite',
+                             extent = 'device',
+                             zoom = 14,
+                             color=TYPE,
+                             # shape=TYPE,
+                             size=I(2.5))
+ggsave(file.path(FIGDIR, 'PD_index_stations_all_types.pdf'),
+       p_stations_byTypes,
+       width = 10, height = 10)
+p_stations_type1n2 <- dplyr::filter(stations_byTypes, TYPE %in% LETTERS[1:2]) %>%
+  qmplot(data = ., x=STATION_LON, y=STATION_LAT,
+         maptype = 'toner-lite',
+         extent = 'device',
+         zoom = 14,
+         color=TYPE,
+         # shape=TYPE,
+         size=I(2.5))
+ggsave(file.path(FIGDIR, 'PD_index_stations_type_AandB.pdf'),
+       p_stations_type1n2,
+       width = 10, height = 10)
 
