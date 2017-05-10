@@ -1,3 +1,4 @@
+# Yun Yan (yy1533@nyu.edu)
 theme_set(theme_bw(base_size = 22))
 myGthm <- theme(text = element_text(size = 25),
                 legend.position='bottom')
@@ -5,11 +6,18 @@ myGthm <- theme(text = element_text(size = 25),
 #                 axis.text.x=element_blank())
 
 
-infile <- file.path(getwd(), 'data/201501-citibike-tripdata.csv')
-citibike201501 <- read.csv(infile, stringsAsFactors=FALSE)
-data <- citibike201501
-data$startTimestamp <- strptime(data$starttime, '%m/%d/%Y %H:%M', tz = 'EST5EDT')
-data$stopTimestamp  <- strptime(data$stoptime, '%m/%d/%Y %H:%M', tz = 'EST5EDT')
+infile <- list.files(path=file.path(getwd(), 'data'), pattern='*.csv',
+                     full.names = T)
+# citibike201501 <- read.csv(infile[1], stringsAsFactors=FALSE)
+# data <- citibike201501
+infile <- list.files(path=file.path(getwd(), 'data'), pattern='*.csv',
+                     full.names = T)
+data <- bind_rows(lapply(infile, function(x) read.csv(x, stringsAsFactors=FALSE)))
+
+data$startTimestamp <- as.POSIXct(strptime(data$starttime, '%m/%d/%Y %H:%M',
+                                           tz = 'EST5EDT'))
+data$stopTimestamp  <- as.POSIXct(strptime(data$stoptime, '%m/%d/%Y %H:%M',
+                                           tz = 'EST5EDT'))
 data$startweekday <- factor(weekdays(data$startTimestamp),
                             levels= c("Sunday", "Monday","Tuesday",
                                       "Wednesday", "Thursday", "Friday",
@@ -29,7 +37,7 @@ start_lon_max <- max(data$start.station.longitude)
 plot_lat_bt  <- start_lat_min - 2
 plot_lat_up  <- start_lat_max + 2
 plot_lon_lft <- start_lon_min - 2
-plot_lon_rit <- start_lat_max + 2
+plot_lon_rit <- start_lon_max + 2
 
 ## Static Scatter Plot
 if (0) {
