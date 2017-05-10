@@ -1,3 +1,7 @@
+# Citi
+data/*.zip
+data_taxi/*.zip
+
 # Created by http://www.gitignore.io
 *.xcodeproj/*
 ### Xcode ###

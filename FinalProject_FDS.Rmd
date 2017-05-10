@@ -24,6 +24,7 @@ We have the following general questions to examine whether they are possible:
 
 - Is there any specific purpose of people to use CitiBike?
 - Can we find a robust approach to indirectly study the hidden preference of human activities which cannot be directly observed.
+- Can we predict where to set new stations when CitiBike needs to expend their services
 
 # Why Citibike trip data
 
@@ -32,6 +33,15 @@ Here are three main reasons to select CitiBike trip data:
 1. Throughout the semester the course introduced many data science method, e.g. regression, clustering, time-series analysis, NLP, and network analysis, etc, we are looking for a wonderful data set which would allow us try the methods as many as possible.
 2. The context covered by the data set should not be unfamiliar to students, hence the solutions to challenges can be shared and have actual meanings in real life.
 3. The volume of data set should be small, though we don't require big data. In the same time, the format of data should be not dirty so that we can spend most of time on selecting appropriate method, tuning the parameters of algorithms, and examining the results to generate interpretations that make sense.
+4. The geographical information of CitiBike data correlate well with NYC Taxi data.
+
+# Hypothesis 
+
+- The `dropoff` data for Taxi data better represents actual needs for trips to take from.
+This Hypothesis is safe to make due to:
+  - We don't actually look at the direction of people traveling, we do look is the spot
+  - We care about the geolocation the `need` is from, the `dropoff` data reflects this more than `pickup` since people are more close to `from dropoff spot to there destinition` to `from they want to get a taxi to they actaully get one or even can't get one`
+  - What we want to predict is new stations for CitiBike. Stations are stationary: once done, it's there regardless of the time. (Unlike taxies are mobile during a day) 
 
 # Tech details before running the RMD
 
@@ -73,7 +83,9 @@ myGthm <- theme(text = element_text(size = 15),
 
 # Download or import data
 
-CitiBike data source is <https://s3.amazonaws.com/tripdata/index.html>. Here I provided a bash script to download and unzip data. 
+CitiBike data source is <https://s3.amazonaws.com/tripdata/index.html>.
+NYC Taxi data source is <http://www.nyc.gov/html/tlc/html/about/trip_record_data.shtml>.
+Here we provided bash scripts to download and unzip data. 
 
 If you would like to run from scratch, please run following commands in terminal:
 
@@ -83,12 +95,15 @@ cd .
 # create data folder
 mkdir -p data 
 cd ./src
+# You may want to modify the sh file to include/exclude datas
 sh get_data.sh
+sh get_data_taxi.sh
 ```
 
+## CitiBike data import
 If successful, CitiBike trip data set is available at folder data to be read in.
 ```{r}
-infile <- list.files(path=file.path(getwd(), 'data'), pattern='*.csv',
+infile <- list.files(path=file.path(DATADIR), pattern='*-citibike-tripdata.csv',
                      full.names = T)
 ```
 
@@ -97,6 +112,25 @@ data <- bind_rows(lapply(infile, function(x) {
   read.csv(x, stringsAsFactors=FALSE)}))
 ```
 
+## NYC data import
+```{r}
+use.RDS.for.taxi  <- TRUE
+RDS.name.for.taxi <- 'taxi.RDS'
+
+trip.data <- 
+  if(use.RDS.for.taxi){
+    readRDS(file.path(DATADIR, RDS.name.for.taxi))
+  }else{
+    infile.taxi <- list.files(path=file.path(DATADIR), pattern='\\S*_tripdata_\\d{4}-\\d{2}\\.csv',
+                              full.names = T)
+    bind_rows(lapply(infile.taxi, function(x) {
+                                read.csv(x, stringsAsFactors=FALSE)}))
+  }
+head(trip.data)
+```
+
+
+## RDS import for CitiBike
 Alternatively, I have attached a RDS file which is exactly same as the above. Load the RDS file if you don't want to download and avoid time on importing data.
 
 ```r
@@ -727,6 +761,286 @@ plot_nbclust_obj(pd_station_K)
 
 Because I would manually investigate the clustered heat-map to pick up the groups to define Type-A, Type-B and Type-C stations, it is ok to manually set K as 10 at first. The results of 3 types are consistent to automatically set K as 3, inferred from the model evaluation part. 
 
+# Visualization for NYC Taxi
+```{r useful function}
+save.and.print <- function (plot.func, file.name){
+  pdf(file.path(FIGDIR, file.name), 10, 10)
+  p <- plot.func()
+  print(p)
+  dev.off()
+  print(plot.func())
+}
+```
+
+## Data Schema
+```{r}
+print(summary(trip.data))
+```
+
+## Download Map Data For NYC
+Download Map data with Cordinate auto-adjustory to NYC Taxi Data
+```{r define functions to find bondery}
+# Find outliers
+remove.outliers <- function(x) x[!x %in% boxplot.stats(x)$out]
+# Find min and max at the same time
+min.and.max <-function(x) c(min(x),max(x))
+
+# Find Bondery
+longitude.summary <- min.and.max(c(
+  min.and.max(remove.outliers(trip.data$Pickup_longitude)),
+  min.and.max(remove.outliers(trip.data$Dropoff_longitude)) 
+  ))
+latitude.summary <-  min.and.max(c(
+  min.and.max(remove.outliers(trip.data$Pickup_latitude)),
+  min.and.max(remove.outliers(trip.data$Dropoff_latitude)) 
+  ))
+```
+
+### Featch Map
+```{r, message=FALSE}
+map <- ggmap::get_stamenmap(bbox = c(left = longitude.summary[1],
+                                         bottom=latitude.summary[1],
+                                         right= longitude.summary[2],
+                                         top  = latitude.summary[2]
+                                         ),
+                                 zoom = 12,
+                                 maptype = "toner-lite")
+```
+
+## Sample data
+Loading the whole data set would be too much, to find an optimium value for kmeans 
+### Get sample
+```{r}
+sample.size <- 40000
+sample.row.nums <- sample.int(length(row.names((trip.data))), sample.size)
+trip.data.sample <- trip.data[sample.row.nums,]
+trip.data.sample <- trip.data.sample[trip.data.sample$Pickup_longitude<0,]
+trip.data.sample <- trip.data.sample[trip.data.sample$Pickup_latitude >0,]
+trip.data.sample <- trip.data.sample[trip.data.sample$Dropoff_longitude<0,]
+trip.data.sample <- trip.data.sample[trip.data.sample$Dropoff_latitude >0,]
+taxi.sample.size <- length(row.names(trip.data.sample))
+print(paste("Sample Size:", taxi.sample.size))
+```
+
+### Pickup and Dropoff Visualization of Sample Data
+Red dots for Dropoffs and Blue for Pickups
+```{r}
+Taxi.Pickup.And.Dropoff.with.Sample.Data <- function(){
+  ggmap::ggmap(map, main = "Taxi Pickup And Dropoff with Sample Data") + 
+    ggplot2::geom_point(ggplot2::aes(x = Pickup_longitude, y = Pickup_latitude),
+                        data = trip.data.sample,
+                        shape = ".", color = "blue")+
+    ggplot2::geom_point(ggplot2::aes(x = Dropoff_longitude, y = Dropoff_latitude),
+                        data = trip.data.sample,
+                        shape = ".", color = "red")
+}
+save.and.print(
+  Taxi.Pickup.And.Dropoff.with.Sample.Data,
+  'taxi_pickup_and_dropoff_sample.pdf')
+```
+
+### Sample Clustering with k=100
+Fisrt Just pick k=100 to see a sample reslut.
+```{r}
+t.k.s.d <- kmeans(trip.data.sample[,8:9],100, iter.max=100)
+```
+```{r}
+t.k.s.d$cluster <- as.factor(t.k.s.d$cluster)
+Taxi.Cluster.Sample.with.k.100 <- function(){
+  ggmap::ggmap(map, main = "Taxi Cluster Sample with k=100") + 
+  ggplot2::geom_point(data = trip.data.sample, shape = ".",
+                      ggplot2::aes(Dropoff_longitude, Dropoff_latitude, color = t.k.s.d$cluster)
+                      )+
+  ggplot2::geom_point(data = as.data.frame(t.k.s.d$centers), shape = 21,
+                      ggplot2::aes(Dropoff_longitude, Dropoff_latitude,
+                                   fill = as.factor(row.names(t.k.s.d$centers)),
+                                   size = as.numeric(t.k.s.d$size))
+                      )+ theme(legend.position="none")
+}
+save.and.print(
+  Taxi.Cluster.Sample.with.k.100, 
+  "taxi_cluster_sample_with_k=100.pd")
+```
+
+### Find k within the dataset itself
+Now let's find a optimium value of k using elbow mothod.
+
+#### Get statistics for different k means
+This is where computation gets *time consumeing*, so I decide to run it on sample data set instead of a whole one.
+```{r}
+taxi.k.numbers <- 1:80
+
+taxi.collect.kmean.statistics <- function (k) {
+  kmean.result <- kmeans(trip.data.sample[,8:9],centers = k, iter.max = max(100,k*2), algorithm="MacQueen")
+  c( kmean.result$tot.withinss, kmean.result$betweenss )
+}
+taxi.k.means.statitcs <- plyr::laply(taxi.k.numbers, 
+                                     taxi.collect.kmean.statistics,
+                                     .progress= plyr::progress_text(char = '+')
+                                     )
+
+# Set label
+taxi.k.means.statitcs <- as.data.frame(taxi.k.means.statitcs)
+colnames(taxi.k.means.statitcs) <- c("Withiness","Betweeness")
+row.names(taxi.k.means.statitcs) <- taxi.k.numbers
+
+# Transform to mean value instead of sum
+taxi.k.means.statitcs$Withiness <- taxi.k.means.statitcs$Withiness/taxi.sample.size
+taxi.k.means.statitcs$Betweeness <- taxi.k.means.statitcs$Betweeness/taxi.sample.size
+```
+
+#### Betweeness and Withiness
+
+```{r}
+Taxi.Withingness.And.Betweeness.by.different.K <- function(){
+  k <- as.numeric(row.names(taxi.k.means.statitcs))
+  ggplot2::ggplot(taxi.k.means.statitcs, main = "Taxi Withingness And Betweeness by different K")+
+    ggplot2::geom_line(ggplot2::aes(x = k, y = Withiness), color = "blue")+
+    ggplot2::geom_line(ggplot2::aes(x = k, y = Betweeness), color = "red")
+}
+save.and.print(
+  Taxi.Withingness.And.Betweeness.by.different.K,
+  "Taxi.Withingness.And.Betweeness.by.different.K.pdf"
+)
+```
+Red for Betweeness and Blue for Withiness.
+
+#### A Closer look
+```{r}
+Taxi.Withingness.And.Betweeness.by.different.K.Closer <- function(){
+  closer <- taxi.k.means.statitcs[3:30,]
+  k <- as.numeric(row.names(closer))
+  ggplot2::ggplot(closer, main = "Taxi Withingness And Betweeness by different K - Closer")+
+    ggplot2::geom_line(ggplot2::aes(x = k, y = Withiness), color = "blue")+
+    ggplot2::geom_line(ggplot2::aes(x = k, y = Betweeness), color = "red")
+}
+save.and.print(
+  Taxi.Withingness.And.Betweeness.by.different.K.Closer,
+  "Taxi.Withingness.And.Betweeness.by.different.K.closer.pdf"
+)
+```
+Red for Betweeness and Blue for Withiness.
+So we pick up k = 7 
+
+# Cluster on whole Taxi dataset
+```{r}
+k=7
+t.k.s.d <- kmeans(trip.data[,8:9],k, iter.max=200, algorithm="MacQueen")
+
+t.k.s.d$cluster <- as.factor(t.k.s.d$cluster)
+Taxi.Need.Clustering <- function(){
+  ggmap::ggmap(map, main = "Taxi Need Clustering") + 
+    ggplot2::geom_point(data = trip.data, shape = ".",
+                        ggplot2::aes(Dropoff_longitude, Dropoff_latitude, color = as.factor(t.k.s.d$cluster))
+                        )+
+    ggplot2::geom_point(data = as.data.frame(t.k.s.d$centers), shape = 21,
+                        ggplot2::aes(Dropoff_longitude, Dropoff_latitude,
+                                     fill = as.factor(row.names(t.k.s.d$centers)),
+                                     size = as.numeric(t.k.s.d$size))
+                        ) + theme(legend.position="none")
+}
+save.and.print(Taxi.Need.Clustering, "Taxi.Need.Clustering.pdf")
+```
+From the grapgh we can see that *k=5* seems meanningful,
+  but, not suitable for CitiBike Potential Station predicting: It's too rough.
+So what do we do?
+
+# Cluster on features exteacted from CitiBike
+## Why?
+I look back to think, what makes CitiBike pick all the stations that way:
+```{r}
+print(p_all_stations)
+```
+In specific, why do they put all stations so close to each other?
+The Answer is simple: People *walk* to nearby stations to get bikes!
+In other words: *Distance* is very *limited*!
+So the key to what Taxi data should take standard for *k* value adoption can be infered from *Distance of Stations* already exist
+
+## MCD of  Stations
+
+I've developed an metrix for measuring *Distance of Stations*: Mean squared Close Distance (MCD)
+
+```{r}
+# MCD
+MCD <- function(points){
+  # Calculate Distance Matrix
+  distance.matrix <- function(points, func){
+    as.matrix(apply(points, 1, function(p1) apply(points, 1, function(p2) func(p1, p2))))
+  }
+  point.distances <- distance.matrix(points, fun = 
+                                       function(x,y) (x[1]-y[1])^2 + (x[2]-y[2])^2
+                                     )
+  
+  # Find Nearest Distance
+  min.no <- function(A) min(A[A>0])
+  point.closest.distance <- apply(point.distances, 1, min.no)
+  
+  # Mean
+  mean.point.closest.distance <- mean(point.closest.distance)
+  mean.point.closest.distance
+}
+
+mean.station.closest.distance <- MCD(stations[,c('STATION_LON','STATION_LAT')])
+print(paste("MCD of Stations:", mean.station.closest.distance))
+```
+
+## MCD over k on Taxi Data
+```{r}
+taxi.max.k <- 500
+taxi.collect.kmean.statistics.MCD <- function (k) {
+  kmeans.result <- kmeans(trip.data.sample[,8:9],centers = k, iter.max = max(100,k*2), algorithm="MacQueen")
+  MCD(kmeans.result$centers)
+}
+taxi.k.means.statitcs.MCD <- plyr::laply(1:taxi.max.k, 
+                                     taxi.collect.kmean.statistics.MCD,
+                                     .progress= plyr::progress_text(char = '+')
+                                     )
+taxi.k.means.statitcs.MCD<- data.frame(taxi.k.means.statitcs.MCD)
+taxi.k.means.statitcs.MCD$k <- 1:taxi.max.k
+colnames(taxi.k.means.statitcs.MCD) <- c("MCD","k")
+```
+
+
+```{r}
+Taxi.MCD.by.different.K <- function(){
+  k <- as.numeric(row.names(taxi.k.means.statitcs.MCD))
+  ggplot2::ggplot(taxi.k.means.statitcs.MCD, main = "Taxi MCD by different K")+
+    ggplot2::geom_line(ggplot2::aes(x = k, y = MCD))
+}
+save.and.print(
+  Taxi.MCD.by.different.K,
+  "Taxi.MCD.by.different.K.pdf"
+)
+```
+
+### Best k
+```{r}
+taxi.k.means.statitcs.MCD[taxi.k.means.statitcs.MCD$MCD<mean.station.closest.distance,]
+```
+
+
+## There should be station here
+
+```{r}
+k=300
+all.stations.should.kmeans <- kmeans(trip.data[,8:9],k, iter.max=200, algorithm="MacQueen")
+
+all.stations.should.kmeans$cluster <- as.factor(all.stations.should.kmeans$cluster)
+Stations.should.be.here <- function(){
+  ggmap::ggmap(map, main = "Stations should be here") + 
+    ggplot2::geom_point(data = trip.data, shape = ".",
+                        ggplot2::aes(Dropoff_longitude, Dropoff_latitude, color = as.factor(all.stations.should.kmeans$cluster))
+                        )+
+    ggplot2::geom_point(data = as.data.frame(all.stations.should.kmeans$centers), shape = 21,
+                        ggplot2::aes(Dropoff_longitude, Dropoff_latitude,
+                                     fill = as.factor(row.names(all.stations.should.kmeans$centers)),
+                                     size = as.numeric(all.stations.should.kmeans$size))
+                        ) + theme(legend.position="none")
+}
+save.and.print(Stations.should.be.here, "Stations.should.be.here.pdf")
+```
+
+
 # Final Conclusions
 
 Human activities cannot be observed directly, but the picking and docking activities at stations provide indirect yet robust data for us to investigate the hidden pattern. 
@@ -736,6 +1050,7 @@ First it can be inferred from data visualization part that there exists possible
 # Further work
 
 Future work is to find whether there are stations of which the temporal profile changes after some year. For example, station-X during 2013-2015 is Type-A station, i.e. home-like station. But all of a sudden, since 2016, the temporal profile of station-X changed to Type-C station, i.e. stable through all the day. It would suggest either the neighborhood got entirely changed, or the major transportation station got changed. The meaning is that without directly investigating the hidden pattern of human activities, we can still have an indirect approach to capture the changes. 
+An order of new Stations can be figured. For this, meausre of renevues are needed, this can be done once estimate of income from each stations are available.
 
 # Contributions
 
@@ -750,7 +1065,8 @@ Future work is to find whether there are stations of which the temporal profile 
 
 **Willian Zhang**
 
-- Project discussion
+- NYC Taxi data visualization
+- CitiBike potential new Stations discovery by Taxi
 
 # Codes
 

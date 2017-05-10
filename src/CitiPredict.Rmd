@@ -1,0 +1,140 @@
+---
+title: "CitiPredict"
+output: html_notebook
+---
+
+## Load data
+```{r}
+path.to.file <- "/Users/Willian/Downloads/green_tripdata_2016-06.csv"
+path.to.RDS <- "trip.data"
+use.RDS <- TRUE
+```
+
+```{r, eval=FALSE}
+trip.data <- if(use.RDS){ 
+    readRDS(path.to.RDS)
+}else{ 
+    read.csv(path.to.file)
+}
+head(trip.data)
+```
+
+```{r}
+summary(trip.data)
+```
+
+## Map
+### Cordinate auto-adjustory
+```{r}
+remove.outliers <- function(x) x[!x %in% boxplot.stats(x)$out]
+min.and.max <-function(x) c(min(x),max(x))
+```
+```{r}
+longitude.summary <- min.and.max(c(
+  min.and.max(remove.outliers(trip.data$Pickup_longitude)),
+  min.and.max(remove.outliers(trip.data$Dropoff_longitude)) 
+  ))
+latitude.summary <-  min.and.max(c(
+  min.and.max(remove.outliers(trip.data$Pickup_latitude)),
+  min.and.max(remove.outliers(trip.data$Dropoff_latitude)) 
+  ))
+```
+
+### Featch Map
+```{r, message=FALSE, eval=FALSE}
+map <- ggmap::get_stamenmap(bbox = c(left = longitude.summary[1],
+                                         bottom=latitude.summary[1],
+                                         right= longitude.summary[2],
+                                         top  = latitude.summary[2]
+                                         ),
+                                 zoom = 12,
+                                 maptype = "toner-lite")
+```
+
+## Sample
+### Get sample
+```{r}
+sample.size <- 40000
+sample.row.nums <- sample.int(length(row.names((trip.data))), sample.size)
+trip.data.sample <- trip.data[sample.row.nums,]
+trip.data.sample <- trip.data.sample[trip.data.sample$Pickup_longitude<0,]
+trip.data.sample <- trip.data.sample[trip.data.sample$Pickup_latitude >0,]
+trip.data.sample <- trip.data.sample[trip.data.sample$Dropoff_longitude<0,]
+trip.data.sample <- trip.data.sample[trip.data.sample$Dropoff_latitude >0,]
+length(row.names(trip.data.sample))
+```
+
+### Sample by Pickup and Dropoff
+```{r}
+ggmap::ggmap(map) + 
+  ggplot2::geom_point(ggplot2::aes(x = Pickup_longitude, y = Pickup_latitude),
+                      data = trip.data.sample,
+                      shape = ".", color = "blue")+
+  ggplot2::geom_point(ggplot2::aes(x = Dropoff_longitude, y = Dropoff_latitude),
+                      data = trip.data.sample,
+                      shape = ".", color = "red")
+```
+
+### Sample Clustering
+```{r}
+#t.k.s.p <- kmeans(trip.data.sample[,6:7],100, iter.max=100)
+t.k.s.d <- kmeans(trip.data.sample[,8:9],100, iter.max=100)
+```
+```{r}
+#t.k.s.p$cluster <- as.factor(t.k.s.p$cluster)
+t.k.s.d$cluster <- as.factor(t.k.s.d$cluster)
+ggmap::ggmap(map) + 
+  ggplot2::geom_point(data = trip.data.sample, shape = ".",
+                      ggplot2::aes(Dropoff_longitude, Dropoff_latitude, color = t.k.s.d$cluster)
+                      )+
+  ggplot2::geom_point(data = as.data.frame(t.k.s.d$centers), shape = 21,
+                      ggplot2::aes(Dropoff_longitude, Dropoff_latitude,
+                                   fill = as.factor(row.names(t.k.s.d$centers)),
+                                   size = as.numeric(t.k.s.d$size))
+                      )
+```
+
+### Find the optimium value of k
+```{r}
+k.means.statitcs <- data.frame(1:200)
+colnames(k.means.statitcs) <- c("k")
+collect.kmean.statistics <- function (k) {
+  kmean.result <- kmeans(trip.data.sample[,8:9],centers = k, iter.max = max(100,k*2), algorithm="MacQueen")
+  c( kmean.result$tot.withinss, kmean.result$betweenss )
+}
+k.means.statitcs <- apply(k.means.statitcs,1, collect.kmean.statistics)
+```
+```{r}
+k.means.statitcs <- as.data.frame(t(k.means.statitcs))
+colnames(k.means.statitcs) <- c("Withiness","Betweeness")
+```
+
+```{r}
+k.s <- as.numeric(row.names(k.means.statitcs))
+ggplot2::ggplot(k.means.statitcs)+
+  ggplot2::geom_line(ggplot2::aes(x = k.s, y = Withiness), color = "blue")+
+  ggplot2::geom_line(ggplot2::aes(x = k.s, y = Betweeness), color = "red")
+```
+
+```{r}
+k.s <- as.numeric(row.names(k.means.statitcs[10:50,]))
+ggplot2::ggplot(k.means.statitcs[10:50,])+
+  ggplot2::geom_line(ggplot2::aes(x = k.s, y = Withiness), color = "blue")+
+  ggplot2::geom_line(ggplot2::aes(x = k.s, y = Betweeness), color = "red")
+```
+
+## Cluster on whole dataset
+```{r}
+t.k.s.d <- kmeans(trip.data[,8:9],32, iter.max=200, algorithm="MacQueen")
+
+t.k.s.d$cluster <- as.factor(t.k.s.d$cluster)
+ggmap::ggmap(map) + 
+  ggplot2::geom_point(data = trip.data, shape = ".",
+                      ggplot2::aes(Dropoff_longitude, Dropoff_latitude, color = as.factor(t.k.s.d$cluster))
+                      )+
+  ggplot2::geom_point(data = as.data.frame(t.k.s.d$centers), shape = 21,
+                      ggplot2::aes(Dropoff_longitude, Dropoff_latitude,
+                                   fill = as.factor(row.names(t.k.s.d$centers)),
+                                   size = as.numeric(t.k.s.d$size))
+                      )
+```
